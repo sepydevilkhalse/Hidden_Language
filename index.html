@@ -3353,7 +3353,486 @@
             setBadgeDone(badgeDosham, 'ورود', false);
         }
 
-        console.log('✅ Hidden Language راه‌اندازی شد');
+        // ==============================================
+        // ===== PWA: install as an app (Windows + Android) =====
+        // ==============================================
+        // Registering the service worker is what lets Chrome/Edge offer
+        // "Install app" on Windows and Android, and is also what makes the
+        // manual update button below able to "install" a new index.html
+        // (see sw.js: it caches the document and always serves that cached
+        // copy first, so writing a new copy into the cache + reloading is
+        // effectively "downloading and running" the update).
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.error('SW register failed:', err));
+            });
+        }
+
+        // ==============================================
+        // ===== Manual update check (GitHub repo) =====
+        // ==============================================
+        // Bump this string (and push the change to the repo below) whenever
+        // a new index.html is published. Nothing here ever runs on its own —
+        // it only fires when the person pulls the screen down from the very
+        // top (see the pull-to-refresh handler further below), and it only
+        // overwrites the installed copy after they confirm the prompt.
+        // Offline: fetch fails, so we just say so and keep using whatever
+        // is already installed/cached.
+        const APP_VERSION = '2026.09.08.5';
+        const REPO_OWNER = 'sepydevilkhalse';
+        const REPO_NAME = 'vs-code';
+        const REPO_BRANCH = 'main';
+        const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
+
+        // ==============================================
+        // ===== Fast, resilient fetch from the GitHub repo =====
+        // ==============================================
+        // raw.githubusercontent.com can be slow (or throttled) on some
+        // networks. jsDelivr mirrors GitHub repos on a separate, generally
+        // faster/less-filtered CDN — but it caches, so we hit its "purge"
+        // endpoint first to force it to grab a fresh copy from GitHub right
+        // then. Every attempt has its own timeout so nothing ever hangs:
+        // purge -> jsDelivr (fresh) -> raw.githubusercontent.com (always
+        // fresh, used only if jsDelivr is unreachable on this network).
+        function fetchWithTimeout(url, options, timeoutMs) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, Object.assign({}, options, { signal: controller.signal })).finally(() => clearTimeout(id));
+        }
+
+        async function fetchFreshFile(path) {
+            const jsdelivrUrl = 'https://cdn.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
+            const purgeUrl = 'https://purge.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
+            const rawUrl = 'https://raw.githubusercontent.com/' + REPO_OWNER + '/' + REPO_NAME + '/' + REPO_BRANCH + '/' + path;
+
+            try { await fetchWithTimeout(purgeUrl, { cache: 'no-store' }, 2500); } catch (e) {}
+
+            try {
+                const res = await fetchWithTimeout(jsdelivrUrl + '?t=' + Date.now(), { cache: 'no-store' }, 4000);
+                if (res.ok) return await res.text();
+            } catch (e) {}
+
+            const res2 = await fetchWithTimeout(rawUrl + '?t=' + Date.now(), { cache: 'no-store' }, 6000);
+            if (!res2.ok) throw new Error('HTTP ' + res2.status + (res2.status === 404 ? ' — فایل پیدا نشد' : ''));
+            return await res2.text();
+        }
+
+        function extractAppVersion(htmlText) {
+            const m = htmlText.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+            return m ? m[1] : null;
+        }
+
+        function setPullStatus(text) {
+            const t = document.getElementById('pullRefreshText');
+            if (t) t.textContent = text;
+        }
+
+        // Custom in-app confirm dialog for the update prompt — used instead
+        // of the native confirm(), since some mobile browsers render that as
+        // a bar anchored to the top of the screen, right on top of the
+        // pull-refresh indicator.
+        function showUpdateConfirm(currentVersion, newVersion) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('updateConfirmOverlay');
+                const sub = document.getElementById('updateConfirmSub');
+                const body = document.getElementById('updateConfirmBody');
+                const yesBtn = document.getElementById('updateConfirmYes');
+                const noBtn = document.getElementById('updateConfirmNo');
+                if (!overlay || !sub || !body || !yesBtn || !noBtn) { resolve(true); return; }
+
+                sub.textContent = 'نسخه فعلی: ' + currentVersion;
+                body.innerHTML = 'نسخه جدید: <strong style="color:#c4b5fd;">' + newVersion + '</strong><br><br>دانلود و نصب بشه؟';
+                overlay.classList.add('show');
+
+                function cleanup(result) {
+                    overlay.classList.remove('show');
+                    yesBtn.removeEventListener('click', onYes);
+                    noBtn.removeEventListener('click', onNo);
+                    resolve(result);
+                }
+                function onYes() { cleanup(true); }
+                function onNo() { cleanup(false); }
+                yesBtn.addEventListener('click', onYes);
+                noBtn.addEventListener('click', onNo);
+            });
+        }
+
+        async function installUpdate(html, version) {
+            try {
+                setPullStatus('⬇️ در حال نصب نسخه جدید...');
+                if ('caches' in window) {
+                    const cache = await caches.open(UPDATE_CACHE_NAME);
+                    const makeResponse = () => new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+                    const docUrl = location.href.split('#')[0].split('?')[0];
+                    await cache.put(new Request(docUrl), makeResponse());
+                    await cache.put(new Request('./'), makeResponse());
+                    await cache.put(new Request('./index.html'), makeResponse());
+                }
+                localStorage.setItem('installedVersion', version);
+                setPullStatus('✅ نصب شد! در حال بازکردن نسخه جدید...');
+                setTimeout(() => location.reload(), 800);
+            } catch (err) {
+                console.error(err);
+                setPullStatus('❌ نصب آپدیت ناموفق بود');
+            }
+        }
+
+        // Returns a short status string so the pull-to-refresh indicator can
+        // show a final result before it fades away. All progress/result text
+        // is written straight into the pull-refresh bar itself (never as a
+        // toast) so it never stacks on top of the refresh indicator.
+        async function checkForUpdate() {
+            fetchMessages(true); // quietly sync the messages panel in the background too
+            if (!navigator.onLine) {
+                setPullStatus('📴 آفلاین؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه');
+                return { ok: false, text: '📴 آفلاین' };
+            }
+            setPullStatus('🔄 در حال بررسی آپدیت...');
+            try {
+                const text = await fetchFreshFile('index.html');
+                const remoteVersion = extractAppVersion(text);
+                if (!remoteVersion) throw new Error('no version marker found');
+                if (remoteVersion === APP_VERSION) {
+                    return { ok: true, text: '✅ آخرین نسخه رو دارید (' + APP_VERSION + ')' };
+                }
+                const wantsUpdate = await showUpdateConfirm(APP_VERSION, remoteVersion);
+                if (!wantsUpdate) {
+                    return { ok: true, text: 'نسخه جدید موجوده (رد شد)' };
+                }
+                await installUpdate(text, remoteVersion);
+                return { ok: true, text: '✅ نصب شد' };
+            } catch (err) {
+                console.error(err);
+                return { ok: false, text: '❌ بررسی آپدیت ناموفق بود' };
+            }
+        }
+
+
+        // ==============================================
+        // ===== Pull-to-refresh (pull down from the top -> checkForUpdate) =====
+        // ==============================================
+        (function setupPullToRefresh() {
+            const el = document.getElementById('pullRefresh');
+            const iconEl = document.getElementById('pullRefreshIcon');
+            const textEl = document.getElementById('pullRefreshText');
+            const progressEl = document.getElementById('pullRefreshProgress');
+            if (!el || !iconEl || !textEl || !progressEl) return;
+
+            const THRESHOLD = 70;   // px of pull needed to trigger a check
+            const MAX_PULL = 110;   // visual cap so the indicator can't fly off forever
+            const RESISTANCE = 0.5;
+            const RING_CIRCUMFERENCE = 113.1; // 2 * PI * r(18), matches the SVG circle radius
+            let startY = 0;
+            let lastPullPx = 0;
+            let dragging = false;   // finger is down and we're watching it
+            let pulling = false;    // confirmed downward drag from the very top
+            let checking = false;   // an update check is in flight
+            let wasReady = false;   // whether we've already buzzed for crossing the threshold
+
+            function vibrate(ms) {
+                try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
+            }
+
+            function getScrollTop() {
+                return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            }
+
+            function paint(px) {
+                lastPullPx = Math.max(0, Math.min(MAX_PULL, px));
+                const progress = Math.min(1, lastPullPx / THRESHOLD);
+                el.classList.add('visible');
+                el.style.transform = 'translateX(-50%) translateY(' + (-78 + lastPullPx) + 'px) scale(' + (0.82 + progress * 0.18) + ')';
+                el.style.opacity = String(Math.min(1, lastPullPx / 26));
+                iconEl.style.transform = 'rotate(' + (progress * 180) + 'deg)';
+                progressEl.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - progress));
+                if (progress >= 1) {
+                    if (!wasReady) { wasReady = true; vibrate(10); }
+                    el.classList.add('ready');
+                    textEl.textContent = 'رها کن تا بررسی بشه';
+                } else {
+                    wasReady = false;
+                    el.classList.remove('ready');
+                    textEl.textContent = 'بکش برای بررسی آپدیت';
+                }
+            }
+
+            function resetVisual() {
+                el.classList.remove('visible', 'ready', 'spinning', 'success', 'error');
+                el.style.transform = 'translateX(-50%) translateY(-78px) scale(0.82)';
+                el.style.opacity = '0';
+                iconEl.style.transform = 'rotate(0deg)';
+                iconEl.textContent = '↓';
+                progressEl.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+                wasReady = false;
+            }
+
+            function endDrag() {
+                dragging = false;
+                pulling = false;
+                if (!checking) resetVisual();
+            }
+
+            function triggerCheck() {
+                vibrate(15);
+                checking = true;
+                el.classList.remove('ready');
+                el.classList.add('visible', 'spinning');
+                el.style.transform = 'translateX(-50%) translateY(14px) scale(1)';
+                el.style.opacity = '1';
+                iconEl.style.transform = 'rotate(0deg)';
+                progressEl.style.strokeDashoffset = '';
+                textEl.textContent = 'در حال بررسی آپدیت...';
+
+                function finish(ok, text) {
+                    el.classList.remove('spinning');
+                    el.classList.add(ok ? 'success' : 'error');
+                    iconEl.textContent = ok ? '✓' : '✕';
+                    textEl.textContent = text || (ok ? 'انجام شد' : '❌ ناموفق');
+                    if (!ok) vibrate([12, 40, 12]);
+                    setTimeout(() => { checking = false; resetVisual(); }, 1300);
+                }
+
+                checkForUpdate().then((result) => {
+                    finish(!!(result && result.ok), result && result.text);
+                }).catch(() => {
+                    finish(false, '❌ ناموفق');
+                });
+            }
+
+            document.addEventListener('touchstart', function(e) {
+                if (checking || e.touches.length !== 1 || getScrollTop() > 2) return;
+                startY = e.touches[0].clientY;
+                dragging = true;
+                pulling = false;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!dragging || checking) return;
+                const delta = e.touches[0].clientY - startY;
+                if (delta <= 0 || getScrollTop() > 2) { endDrag(); return; }
+                pulling = true;
+                e.preventDefault(); // hold the gesture ourselves instead of letting the page rubber-band-scroll
+                paint(delta * RESISTANCE);
+            }, { passive: false });
+
+            document.addEventListener('touchend', function() {
+                if (!dragging) return;
+                dragging = false;
+                if (!pulling) return;
+                pulling = false;
+                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
+                triggerCheck();
+            }, { passive: true });
+
+            document.addEventListener('touchcancel', function() { endDrag(); }, { passive: true });
+
+            // ----- Mouse drag equivalent, so this is also testable on a
+            // desktop browser (mouse) and not only on real touch devices -----
+            let mouseDragging = false;
+            document.addEventListener('mousedown', function(e) {
+                if (checking || getScrollTop() > 2 || e.button !== 0) return;
+                if (e.target.closest('button, a, input, textarea, select, [contenteditable], .modal-overlay')) return;
+                if (e.clientY > 120) return; // only start the gesture very near the top of the viewport
+                startY = e.clientY;
+                mouseDragging = true;
+                pulling = false;
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!mouseDragging || checking) return;
+                const delta = e.clientY - startY;
+                if (delta <= 0 || getScrollTop() > 2) { mouseDragging = false; pulling = false; if (!checking) resetVisual(); return; }
+                pulling = true;
+                e.preventDefault();
+                paint(delta * RESISTANCE);
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (!mouseDragging) return;
+                mouseDragging = false;
+                if (!pulling) return;
+                pulling = false;
+                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
+                triggerCheck();
+            });
+
+            // Exposed so the header's refresh button can run the exact same
+            // "checking" animation + logic as a real pull gesture.
+            window.runUpdateCheckNow = function() {
+                if (checking || dragging || mouseDragging) return;
+                triggerCheck();
+            };
+        })();
+
+        // ==============================================
+        // ===== Messages panel (synced from the GitHub README) =====
+        // ==============================================
+        // The developer "broadcasts" to every installed copy of the app just
+        // by editing README.md in the same GitHub repo used for updates.
+        // This panel fetches that file fresh every time it's opened (and
+        // quietly in the background during pull-to-refresh) and renders it
+        // with a tiny, safe, markdown-lite parser — no server, no accounts,
+        // just a file on GitHub acting as a one-way message board.
+
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function simpleHash(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+            return h.toString(36);
+        }
+
+        function mdInline(t) {
+            t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+                const safeUrl = /^https?:\/\//i.test(url) ? url : '#';
+                return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+            });
+            t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            t = t.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+            return t;
+        }
+
+        function renderMarkdownLite(md) {
+            const lines = escapeHtml(md).replace(/\r\n/g, '\n').split('\n');
+            let html = '', inList = false, paraBuffer = [];
+            function flushPara() { if (paraBuffer.length) { html += '<p>' + paraBuffer.join('<br>') + '</p>'; paraBuffer = []; } }
+            function closeList() { if (inList) { html += '</ul>'; inList = false; } }
+            for (const raw of lines) {
+                const line = raw.trim();
+                if (!line) { flushPara(); closeList(); continue; }
+                if (/^---+$/.test(line)) { flushPara(); closeList(); html += '<hr>'; continue; }
+                let m;
+                if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
+                    flushPara(); closeList();
+                    html += '<h' + m[1].length + '>' + mdInline(m[2]) + '</h' + m[1].length + '>';
+                    continue;
+                }
+                if ((m = line.match(/^[-*]\s+(.*)$/))) {
+                    flushPara();
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += '<li>' + mdInline(m[1]) + '</li>';
+                    continue;
+                }
+                if ((m = line.match(/^&gt;\s?(.*)$/))) {
+                    flushPara(); closeList();
+                    html += '<blockquote>' + mdInline(m[1]) + '</blockquote>';
+                    continue;
+                }
+                closeList();
+                paraBuffer.push(mdInline(line));
+            }
+            flushPara(); closeList();
+            return html || '<p style="color:#6a6a8a;">(پیامی موجود نیست)</p>';
+        }
+
+        const messagesOverlay = document.getElementById('messagesOverlay');
+        const messagesBody = document.getElementById('messagesBody');
+        const messagesUpdatedAt = document.getElementById('messagesUpdatedAt');
+        const messagesBtn = document.getElementById('messagesBtn');
+        const msgDot = document.getElementById('msgDot');
+        const messagesRefreshBtn = document.getElementById('messagesRefreshBtn');
+        const updateCheckBtn = document.getElementById('updateCheckBtn');
+
+        if (updateCheckBtn) {
+            updateCheckBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (window.runUpdateCheckNow) window.runUpdateCheckNow();
+            });
+        }
+
+        async function fetchMessages(silent) {
+            try {
+                const text = await fetchFreshFile('README.md');
+                const seenHash = localStorage.getItem('messagesSeenHash');
+                const newHash = simpleHash(text);
+                localStorage.setItem('messagesContent', text);
+                localStorage.setItem('messagesFetchedAt', String(Date.now()));
+                if (newHash !== seenHash && msgDot) msgDot.classList.add('show');
+                return { ok: true, text: text };
+            } catch (err) {
+                if (!silent) console.error(err);
+                return { ok: false, text: null, error: (err && err.name === 'AbortError') ? 'اتصال کند بود (timeout)' : ((err && err.message) ? err.message : 'خطای شبکه') };
+            }
+        }
+
+        function markMessagesSeen() {
+            const content = localStorage.getItem('messagesContent') || '';
+            localStorage.setItem('messagesSeenHash', simpleHash(content));
+            if (msgDot) msgDot.classList.remove('show');
+        }
+
+        function formatTimeAgo(ts) {
+            if (!ts) return '';
+            const diffSec = Math.floor((Date.now() - ts) / 1000);
+            if (diffSec < 60) return 'همین الان بروزرسانی شد';
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return 'بروزرسانی: ' + diffMin + ' دقیقه پیش';
+            const diffH = Math.floor(diffMin / 60);
+            if (diffH < 24) return 'بروزرسانی: ' + diffH + ' ساعت پیش';
+            return 'بروزرسانی: ' + Math.floor(diffH / 24) + ' روز پیش';
+        }
+
+        function renderMessagesFromCache() {
+            const content = localStorage.getItem('messagesContent');
+            const fetchedAt = Number(localStorage.getItem('messagesFetchedAt') || 0);
+            if (content) {
+                messagesBody.innerHTML = renderMarkdownLite(content);
+                messagesUpdatedAt.textContent = formatTimeAgo(fetchedAt);
+            } else {
+                messagesBody.innerHTML = '<div class="messages-loading">در حال دریافت پیام‌ها...</div>';
+                messagesUpdatedAt.textContent = '...';
+            }
+        }
+
+        async function openMessages() {
+            messagesOverlay.classList.add('show');
+            renderMessagesFromCache();
+            markMessagesSeen();
+            const result = await fetchMessages(true);
+            if (result.ok) {
+                renderMessagesFromCache();
+                markMessagesSeen();
+            } else if (!localStorage.getItem('messagesContent')) {
+                messagesBody.innerHTML = '<div class="messages-loading" style="color:#f87171;">❌ دریافت پیام‌ها ناموفق بود<br>(' + escapeHtml(result.error || 'خطای شبکه') + ')</div>';
+                messagesUpdatedAt.textContent = '';
+            } else {
+                messagesUpdatedAt.textContent = '❌ ناموفق: ' + result.error;
+            }
+        }
+
+        function closeMessages() {
+            messagesOverlay.classList.remove('show');
+        }
+
+        if (messagesBtn) {
+            messagesBtn.addEventListener('click', function(e) { e.stopPropagation(); openMessages(); });
+        }
+        if (messagesRefreshBtn) {
+            messagesRefreshBtn.addEventListener('click', async function() {
+                messagesRefreshBtn.disabled = true;
+                const orig = messagesRefreshBtn.textContent;
+                messagesRefreshBtn.textContent = '⏳ ...';
+                const result = await fetchMessages(true);
+                if (result.ok) {
+                    renderMessagesFromCache();
+                    markMessagesSeen();
+                } else {
+                    messagesUpdatedAt.textContent = '❌ ناموفق: ' + result.error;
+                }
+                messagesRefreshBtn.textContent = orig;
+                messagesRefreshBtn.disabled = false;
+            });
+        }
+        if (messagesOverlay) {
+            messagesOverlay.addEventListener('click', function(e) { if (e.target === messagesOverlay) closeMessages(); });
+        }
+
+        // Silently sync the badge once on load, without opening anything
+        window.addEventListener('load', () => { fetchMessages(true); });
+
+        console.log('✅ Hidden Language با قابلیت‌های کامل راه‌اندازی شد!');
     </script>
 </body>
 </html>
