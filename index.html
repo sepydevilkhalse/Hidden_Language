@@ -1021,6 +1021,45 @@
         }
         .source-tooltip.show { opacity:1; }
 
+        /* ===== Pull-to-refresh (update check) ===== */
+        .pull-refresh {
+            position:fixed;
+            top:0;
+            left:50%;
+            transform:translateX(-50%) translateY(-60px);
+            z-index:998;
+            display:flex;
+            align-items:center;
+            gap:6px;
+            padding:8px 16px;
+            border-radius:0 0 16px 16px;
+            background:rgba(30,24,54,0.55);
+            backdrop-filter:blur(14px);
+            -webkit-backdrop-filter:blur(14px);
+            border:1px solid rgba(139,92,246,0.15);
+            border-top:none;
+            box-shadow:0 8px 24px rgba(0,0,0,0.25);
+            transition:transform 0.25s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease;
+            opacity:0;
+            pointer-events:none;
+            white-space:nowrap;
+        }
+        .pull-refresh.visible { opacity:1; }
+        .pull-refresh-icon {
+            display:inline-block;
+            font-size:1rem;
+            transition:transform 0.1s linear;
+        }
+        .pull-refresh.spinning .pull-refresh-icon {
+            animation:pullRefreshSpin 0.8s linear infinite;
+        }
+        @keyframes pullRefreshSpin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+        .pull-refresh-text {
+            font-size:0.68rem;
+            font-weight:700;
+            color:#c4b5fd;
+        }
+
         /* ===== Toast ===== */
         .toast-container {
             position:fixed;
@@ -1315,6 +1354,12 @@
     <!-- ===== Toast Container ===== -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- ===== Pull-to-refresh (checks for update) ===== -->
+    <div class="pull-refresh" id="pullRefresh">
+        <span class="pull-refresh-icon" id="pullRefreshIcon">🔄</span>
+        <span class="pull-refresh-text" id="pullRefreshText">بکش برای بررسی آپدیت</span>
+    </div>
+
     <!-- ===== Dosham Response Bar =====
          Lives here at body level (not inside .dosham-card) so its
          position:fixed is relative to the real viewport, exactly like
@@ -1380,13 +1425,8 @@
             Dosham Dalli؟
             <span class="item-badge enter" id="badgeDosham">ورود</span>
         </button>
-        <div class="menu-divider"></div>
-        <button class="menu-item" id="menuUpdate">
-            <span class="item-icon">🔄</span>
-            بررسی آپدیت
-            <span class="item-badge" id="badgeUpdate">نسخه <span id="badgeUpdateVersion"></span></span>
-        </button>
     </div>
+
 
     <!-- ===== Main Container ===== -->
     <div class="container">
@@ -3168,10 +3208,11 @@
         // ==============================================
         // Bump this string (and push the change to the repo below) whenever
         // a new index.html is published. Nothing here ever runs on its own —
-        // it only fires when the person taps "بررسی آپدیت" in the menu, and
-        // it only overwrites the installed copy after they confirm the
-        // prompt. Offline: fetch fails, so we just say so and keep using
-        // whatever is already installed/cached.
+        // it only fires when the person pulls the screen down from the very
+        // top (see the pull-to-refresh handler further below), and it only
+        // overwrites the installed copy after they confirm the prompt.
+        // Offline: fetch fails, so we just say so and keep using whatever
+        // is already installed/cached.
         const APP_VERSION = '2026.09.08.1';
         const UPDATE_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/index.html';
         const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
@@ -3201,13 +3242,14 @@
             }
         }
 
+        // Returns a short status string so the pull-to-refresh indicator can
+        // show a final result before it fades away; the toasts (kept from
+        // before) still carry the fuller message.
         async function checkForUpdate() {
-            const badge = document.getElementById('badgeUpdate');
             if (!navigator.onLine) {
                 showToast('📴 آفلاین هستید؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه', 'info');
-                return;
+                return { ok: false, text: '📴 آفلاین' };
             }
-            if (badge) setBadgeLoading(badge);
             showToast('🔄 در حال بررسی آپدیت...', 'info', 1600);
             try {
                 const res = await fetch(UPDATE_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
@@ -3217,41 +3259,115 @@
                 if (!remoteVersion) throw new Error('no version marker found');
                 if (remoteVersion === APP_VERSION) {
                     showToast('✅ شما آخرین نسخه رو دارید (' + APP_VERSION + ')', 'success');
-                    if (badge) setBadgeDone(badge, 'بروزه', false);
-                    const v = document.getElementById('badgeUpdateVersion');
-                    if (v) v.textContent = APP_VERSION;
-                    return;
+                    return { ok: true, text: '✅ بروزه' };
                 }
-                if (badge) setBadgeDone(badge, 'جدید!', true);
-                const ok = confirm(
+                const wantsUpdate = confirm(
                     '🎉 نسخه جدیدی موجوده!\n\nنسخه فعلی: ' + APP_VERSION +
                     '\nنسخه جدید: ' + remoteVersion +
                     '\n\nدانلود و نصب بشه؟'
                 );
-                if (!ok) {
+                if (!wantsUpdate) {
                     showToast('باشه، فعلاً همین نسخه می‌مونه', 'info');
-                    const v = document.getElementById('badgeUpdateVersion');
-                    if (v) v.textContent = APP_VERSION;
-                    return;
+                    return { ok: true, text: 'نسخه جدید موجوده' };
                 }
                 await installUpdate(text, remoteVersion);
+                return { ok: true, text: '✅ نصب شد' };
             } catch (err) {
                 console.error(err);
-                if (badge) setBadgeDone(badge, 'بررسی', false);
                 showToast('❌ بررسی آپدیت ناموفق بود (اتصال یا سرور)', 'error');
+                return { ok: false, text: '❌ ناموفق' };
             }
         }
 
-        const menuUpdateBtn = document.getElementById('menuUpdate');
-        if (menuUpdateBtn) {
-            menuUpdateBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                closeMenu();
-                checkForUpdate();
-            });
-        }
+        // ==============================================
+        // ===== Pull-to-refresh (pull down from the top -> checkForUpdate) =====
+        // ==============================================
+        (function setupPullToRefresh() {
+            const el = document.getElementById('pullRefresh');
+            const iconEl = document.getElementById('pullRefreshIcon');
+            const textEl = document.getElementById('pullRefreshText');
+            if (!el || !iconEl || !textEl) return;
 
-        { const v = document.getElementById('badgeUpdateVersion'); if (v) v.textContent = APP_VERSION; }
+            const THRESHOLD = 70;  // px of pull needed to trigger a check
+            const MAX_PULL = 110;  // visual cap so the indicator can't fly off forever
+            const RESISTANCE = 0.5;
+            let startY = 0;
+            let lastPullPx = 0;
+            let dragging = false;   // finger is down and we're watching it
+            let pulling = false;    // confirmed downward drag from the very top
+            let checking = false;   // an update check is in flight
+
+            function getScrollTop() {
+                return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            }
+
+            function paint(px) {
+                lastPullPx = Math.max(0, Math.min(MAX_PULL, px));
+                const progress = lastPullPx / THRESHOLD;
+                el.classList.add('visible');
+                el.style.transform = 'translateX(-50%) translateY(' + (-60 + lastPullPx) + 'px)';
+                el.style.opacity = String(Math.min(1, lastPullPx / 30));
+                iconEl.style.transform = 'rotate(' + (Math.min(1, progress) * 180) + 'deg)';
+                textEl.textContent = progress >= 1 ? 'رها کن تا بررسی بشه' : 'بکش برای بررسی آپدیت';
+            }
+
+            function resetVisual() {
+                el.classList.remove('visible');
+                el.style.transform = 'translateX(-50%) translateY(-60px)';
+                el.style.opacity = '0';
+                iconEl.style.transform = 'rotate(0deg)';
+                el.classList.remove('spinning');
+            }
+
+            function endDrag() {
+                dragging = false;
+                pulling = false;
+                if (!checking) resetVisual();
+            }
+
+            document.addEventListener('touchstart', function(e) {
+                if (checking || e.touches.length !== 1 || getScrollTop() > 2) return;
+                startY = e.touches[0].clientY;
+                dragging = true;
+                pulling = false;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!dragging || checking) return;
+                const delta = e.touches[0].clientY - startY;
+                if (delta <= 0 || getScrollTop() > 2) { endDrag(); return; }
+                pulling = true;
+                e.preventDefault(); // hold the gesture ourselves instead of letting the page rubber-band-scroll
+                paint(delta * RESISTANCE);
+            }, { passive: false });
+
+            document.addEventListener('touchend', function() {
+                if (!dragging) return;
+                dragging = false;
+                if (!pulling) return;
+                pulling = false;
+                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
+
+                checking = true;
+                el.classList.add('visible', 'spinning');
+                el.style.transform = 'translateX(-50%) translateY(14px)';
+                el.style.opacity = '1';
+                iconEl.style.transform = 'rotate(0deg)';
+                textEl.textContent = 'در حال بررسی آپدیت...';
+
+                checkForUpdate().then((result) => {
+                    textEl.textContent = (result && result.text) ? result.text : 'انجام شد';
+                    el.classList.remove('spinning');
+                    setTimeout(() => { checking = false; resetVisual(); }, 1200);
+                }).catch(() => {
+                    textEl.textContent = '❌ ناموفق';
+                    el.classList.remove('spinning');
+                    setTimeout(() => { checking = false; resetVisual(); }, 1200);
+                });
+            }, { passive: true });
+
+            document.addEventListener('touchcancel', function() { endDrag(); }, { passive: true });
+        })();
 
         console.log('✅ Hidden Language با قابلیت‌های کامل راه‌اندازی شد!');
     </script>
