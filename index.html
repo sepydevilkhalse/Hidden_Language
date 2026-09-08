@@ -995,6 +995,12 @@
             font-family:-apple-system,'Helvetica Neue','Segoe UI','Apple Color Emoji',sans-serif;
         }
         .modal-footer .btn-modal-close:active { transform:scale(0.94); }
+        .modal-footer .btn-modal-primary {
+            background:linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color:#fff;
+            border-color:transparent;
+            box-shadow:0 4px 14px rgba(139,92,246,0.35);
+        }
 
         /* ===== Source Tooltip ===== */
         .source-tooltip {
@@ -1497,6 +1503,26 @@
         </div>
     </div>
 
+    <!-- ===== Update confirmation (replaces the native confirm() dialog, which
+         some mobile browsers render as a bar that sits on top of the
+         pull-refresh indicator) ===== -->
+    <div class="modal-overlay" id="updateConfirmOverlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-header-icon">🎉</div>
+                <div>
+                    <div class="modal-header-title">نسخه جدیدی موجوده</div>
+                    <div class="modal-header-sub" id="updateConfirmSub">...</div>
+                </div>
+            </div>
+            <div class="modal-body" id="updateConfirmBody" style="text-align:center; padding:6px 0;"></div>
+            <div class="modal-footer" style="gap:8px;">
+                <button class="btn-modal-close btn-modal-primary" id="updateConfirmYes">⬇️ نصب کن</button>
+                <button class="btn-modal-close" id="updateConfirmNo">فعلاً نه</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== Dosham Response Bar =====
          Lives here at body level (not inside .dosham-card) so its
          position:fixed is relative to the real viewport, exactly like
@@ -1573,6 +1599,7 @@
                 <div class="nearest-hour" id="nearestHour">⏳ نزدیک‌ترین: <span class="nh-time">--:--</span> <span class="nh-meaning">...</span> <span class="nh-source"></span></div>
                 <div class="header-actions">
                     <button class="menu-btn" id="menuBtn" title="سوئیچ برنامه">☰</button>
+                    <button class="menu-btn" id="updateCheckBtn" title="بررسی آپدیت">🔄</button>
                     <button class="menu-btn" id="messagesBtn" title="پیام‌ها">📢<span class="msg-dot" id="msgDot"></span></button>
                     <button class="help-btn" id="helpBtn" title="مشاهده همه معانی ساعت‌ها">!</button>
                 </div>
@@ -3351,9 +3378,44 @@
         // overwrites the installed copy after they confirm the prompt.
         // Offline: fetch fails, so we just say so and keep using whatever
         // is already installed/cached.
-        const APP_VERSION = '2026.09.09.0';
-        const UPDATE_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/index.html';
+        const APP_VERSION = '2026.09.08.5';
+        const REPO_OWNER = 'sepydevilkhalse';
+        const REPO_NAME = 'vs-code';
+        const REPO_BRANCH = 'main';
         const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
+
+        // ==============================================
+        // ===== Fast, resilient fetch from the GitHub repo =====
+        // ==============================================
+        // raw.githubusercontent.com can be slow (or throttled) on some
+        // networks. jsDelivr mirrors GitHub repos on a separate, generally
+        // faster/less-filtered CDN — but it caches, so we hit its "purge"
+        // endpoint first to force it to grab a fresh copy from GitHub right
+        // then. Every attempt has its own timeout so nothing ever hangs:
+        // purge -> jsDelivr (fresh) -> raw.githubusercontent.com (always
+        // fresh, used only if jsDelivr is unreachable on this network).
+        function fetchWithTimeout(url, options, timeoutMs) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, Object.assign({}, options, { signal: controller.signal })).finally(() => clearTimeout(id));
+        }
+
+        async function fetchFreshFile(path) {
+            const jsdelivrUrl = 'https://cdn.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
+            const purgeUrl = 'https://purge.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
+            const rawUrl = 'https://raw.githubusercontent.com/' + REPO_OWNER + '/' + REPO_NAME + '/' + REPO_BRANCH + '/' + path;
+
+            try { await fetchWithTimeout(purgeUrl, { cache: 'no-store' }, 2500); } catch (e) {}
+
+            try {
+                const res = await fetchWithTimeout(jsdelivrUrl + '?t=' + Date.now(), { cache: 'no-store' }, 4000);
+                if (res.ok) return await res.text();
+            } catch (e) {}
+
+            const res2 = await fetchWithTimeout(rawUrl + '?t=' + Date.now(), { cache: 'no-store' }, 6000);
+            if (!res2.ok) throw new Error('HTTP ' + res2.status + (res2.status === 404 ? ' — فایل پیدا نشد' : ''));
+            return await res2.text();
+        }
 
         function extractAppVersion(htmlText) {
             const m = htmlText.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
@@ -3363,6 +3425,36 @@
         function setPullStatus(text) {
             const t = document.getElementById('pullRefreshText');
             if (t) t.textContent = text;
+        }
+
+        // Custom in-app confirm dialog for the update prompt — used instead
+        // of the native confirm(), since some mobile browsers render that as
+        // a bar anchored to the top of the screen, right on top of the
+        // pull-refresh indicator.
+        function showUpdateConfirm(currentVersion, newVersion) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('updateConfirmOverlay');
+                const sub = document.getElementById('updateConfirmSub');
+                const body = document.getElementById('updateConfirmBody');
+                const yesBtn = document.getElementById('updateConfirmYes');
+                const noBtn = document.getElementById('updateConfirmNo');
+                if (!overlay || !sub || !body || !yesBtn || !noBtn) { resolve(true); return; }
+
+                sub.textContent = 'نسخه فعلی: ' + currentVersion;
+                body.innerHTML = 'نسخه جدید: <strong style="color:#c4b5fd;">' + newVersion + '</strong><br><br>دانلود و نصب بشه؟';
+                overlay.classList.add('show');
+
+                function cleanup(result) {
+                    overlay.classList.remove('show');
+                    yesBtn.removeEventListener('click', onYes);
+                    noBtn.removeEventListener('click', onNo);
+                    resolve(result);
+                }
+                function onYes() { cleanup(true); }
+                function onNo() { cleanup(false); }
+                yesBtn.addEventListener('click', onYes);
+                noBtn.addEventListener('click', onNo);
+            });
         }
 
         async function installUpdate(html, version) {
@@ -3397,19 +3489,13 @@
             }
             setPullStatus('🔄 در حال بررسی آپدیت...');
             try {
-                const res = await fetch(UPDATE_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
-                if (!res.ok) throw new Error('http ' + res.status);
-                const text = await res.text();
+                const text = await fetchFreshFile('index.html');
                 const remoteVersion = extractAppVersion(text);
                 if (!remoteVersion) throw new Error('no version marker found');
                 if (remoteVersion === APP_VERSION) {
                     return { ok: true, text: '✅ آخرین نسخه رو دارید (' + APP_VERSION + ')' };
                 }
-                const wantsUpdate = confirm(
-                    '🎉 نسخه جدیدی موجوده!\n\nنسخه فعلی: ' + APP_VERSION +
-                    '\nنسخه جدید: ' + remoteVersion +
-                    '\n\nدانلود و نصب بشه؟'
-                );
+                const wantsUpdate = await showUpdateConfirm(APP_VERSION, remoteVersion);
                 if (!wantsUpdate) {
                     return { ok: true, text: 'نسخه جدید موجوده (رد شد)' };
                 }
@@ -3486,29 +3572,7 @@
                 if (!checking) resetVisual();
             }
 
-            document.addEventListener('touchstart', function(e) {
-                if (checking || e.touches.length !== 1 || getScrollTop() > 2) return;
-                startY = e.touches[0].clientY;
-                dragging = true;
-                pulling = false;
-            }, { passive: true });
-
-            document.addEventListener('touchmove', function(e) {
-                if (!dragging || checking) return;
-                const delta = e.touches[0].clientY - startY;
-                if (delta <= 0 || getScrollTop() > 2) { endDrag(); return; }
-                pulling = true;
-                e.preventDefault(); // hold the gesture ourselves instead of letting the page rubber-band-scroll
-                paint(delta * RESISTANCE);
-            }, { passive: false });
-
-            document.addEventListener('touchend', function() {
-                if (!dragging) return;
-                dragging = false;
-                if (!pulling) return;
-                pulling = false;
-                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
-
+            function triggerCheck() {
                 vibrate(15);
                 checking = true;
                 el.classList.remove('ready');
@@ -3533,9 +3597,71 @@
                 }).catch(() => {
                     finish(false, '❌ ناموفق');
                 });
+            }
+
+            document.addEventListener('touchstart', function(e) {
+                if (checking || e.touches.length !== 1 || getScrollTop() > 2) return;
+                startY = e.touches[0].clientY;
+                dragging = true;
+                pulling = false;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                if (!dragging || checking) return;
+                const delta = e.touches[0].clientY - startY;
+                if (delta <= 0 || getScrollTop() > 2) { endDrag(); return; }
+                pulling = true;
+                e.preventDefault(); // hold the gesture ourselves instead of letting the page rubber-band-scroll
+                paint(delta * RESISTANCE);
+            }, { passive: false });
+
+            document.addEventListener('touchend', function() {
+                if (!dragging) return;
+                dragging = false;
+                if (!pulling) return;
+                pulling = false;
+                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
+                triggerCheck();
             }, { passive: true });
 
             document.addEventListener('touchcancel', function() { endDrag(); }, { passive: true });
+
+            // ----- Mouse drag equivalent, so this is also testable on a
+            // desktop browser (mouse) and not only on real touch devices -----
+            let mouseDragging = false;
+            document.addEventListener('mousedown', function(e) {
+                if (checking || getScrollTop() > 2 || e.button !== 0) return;
+                if (e.target.closest('button, a, input, textarea, select, [contenteditable], .modal-overlay')) return;
+                if (e.clientY > 120) return; // only start the gesture very near the top of the viewport
+                startY = e.clientY;
+                mouseDragging = true;
+                pulling = false;
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!mouseDragging || checking) return;
+                const delta = e.clientY - startY;
+                if (delta <= 0 || getScrollTop() > 2) { mouseDragging = false; pulling = false; if (!checking) resetVisual(); return; }
+                pulling = true;
+                e.preventDefault();
+                paint(delta * RESISTANCE);
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (!mouseDragging) return;
+                mouseDragging = false;
+                if (!pulling) return;
+                pulling = false;
+                if (lastPullPx < THRESHOLD) { resetVisual(); return; }
+                triggerCheck();
+            });
+
+            // Exposed so the header's refresh button can run the exact same
+            // "checking" animation + logic as a real pull gesture.
+            window.runUpdateCheckNow = function() {
+                if (checking || dragging || mouseDragging) return;
+                triggerCheck();
+            };
         })();
 
         // ==============================================
@@ -3547,7 +3673,6 @@
         // quietly in the background during pull-to-refresh) and renders it
         // with a tiny, safe, markdown-lite parser — no server, no accounts,
         // just a file on GitHub acting as a one-way message board.
-        const MESSAGES_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/README.md';
 
         function escapeHtml(s) {
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -3608,12 +3733,18 @@
         const messagesBtn = document.getElementById('messagesBtn');
         const msgDot = document.getElementById('msgDot');
         const messagesRefreshBtn = document.getElementById('messagesRefreshBtn');
+        const updateCheckBtn = document.getElementById('updateCheckBtn');
+
+        if (updateCheckBtn) {
+            updateCheckBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (window.runUpdateCheckNow) window.runUpdateCheckNow();
+            });
+        }
 
         async function fetchMessages(silent) {
             try {
-                const res = await fetch(MESSAGES_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
-                if (!res.ok) throw new Error('HTTP ' + res.status + (res.status === 404 ? ' — فایل README.md پیدا نشد' : ''));
-                const text = await res.text();
+                const text = await fetchFreshFile('README.md');
                 const seenHash = localStorage.getItem('messagesSeenHash');
                 const newHash = simpleHash(text);
                 localStorage.setItem('messagesContent', text);
@@ -3622,7 +3753,7 @@
                 return { ok: true, text: text };
             } catch (err) {
                 if (!silent) console.error(err);
-                return { ok: false, text: null, error: (err && err.message) ? err.message : 'خطای شبکه' };
+                return { ok: false, text: null, error: (err && err.name === 'AbortError') ? 'اتصال کند بود (timeout)' : ((err && err.message) ? err.message : 'خطای شبکه') };
             }
         }
 
