@@ -3351,7 +3351,7 @@
         // overwrites the installed copy after they confirm the prompt.
         // Offline: fetch fails, so we just say so and keep using whatever
         // is already installed/cached.
-        const APP_VERSION = '2026.09.08.4';
+        const APP_VERSION = '2026.09.08.2';
         const UPDATE_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/index.html';
         const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
 
@@ -3360,9 +3360,14 @@
             return m ? m[1] : null;
         }
 
+        function setPullStatus(text) {
+            const t = document.getElementById('pullRefreshText');
+            if (t) t.textContent = text;
+        }
+
         async function installUpdate(html, version) {
             try {
-                showToast('⬇️ در حال نصب نسخه جدید...', 'info', 2000);
+                setPullStatus('⬇️ در حال نصب نسخه جدید...');
                 if ('caches' in window) {
                     const cache = await caches.open(UPDATE_CACHE_NAME);
                     const makeResponse = () => new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
@@ -3372,24 +3377,25 @@
                     await cache.put(new Request('./index.html'), makeResponse());
                 }
                 localStorage.setItem('installedVersion', version);
-                showToast('✅ نصب شد! در حال بازکردن نسخه جدید...', 'success', 1600);
+                setPullStatus('✅ نصب شد! در حال بازکردن نسخه جدید...');
                 setTimeout(() => location.reload(), 800);
             } catch (err) {
                 console.error(err);
-                showToast('❌ نصب آپدیت ناموفق بود', 'error');
+                setPullStatus('❌ نصب آپدیت ناموفق بود');
             }
         }
 
         // Returns a short status string so the pull-to-refresh indicator can
-        // show a final result before it fades away; the toasts (kept from
-        // before) still carry the fuller message.
+        // show a final result before it fades away. All progress/result text
+        // is written straight into the pull-refresh bar itself (never as a
+        // toast) so it never stacks on top of the refresh indicator.
         async function checkForUpdate() {
             fetchMessages(true); // quietly sync the messages panel in the background too
             if (!navigator.onLine) {
-                showToast('📴 آفلاین هستید؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه', 'info');
+                setPullStatus('📴 آفلاین؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه');
                 return { ok: false, text: '📴 آفلاین' };
             }
-            showToast('🔄 در حال بررسی آپدیت...', 'info', 1600);
+            setPullStatus('🔄 در حال بررسی آپدیت...');
             try {
                 const res = await fetch(UPDATE_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
                 if (!res.ok) throw new Error('http ' + res.status);
@@ -3397,8 +3403,7 @@
                 const remoteVersion = extractAppVersion(text);
                 if (!remoteVersion) throw new Error('no version marker found');
                 if (remoteVersion === APP_VERSION) {
-                    showToast('✅ شما آخرین نسخه رو دارید (' + APP_VERSION + ')', 'success');
-                    return { ok: true, text: '✅ بروزه' };
+                    return { ok: true, text: '✅ آخرین نسخه رو دارید (' + APP_VERSION + ')' };
                 }
                 const wantsUpdate = confirm(
                     '🎉 نسخه جدیدی موجوده!\n\nنسخه فعلی: ' + APP_VERSION +
@@ -3406,17 +3411,16 @@
                     '\n\nدانلود و نصب بشه؟'
                 );
                 if (!wantsUpdate) {
-                    showToast('باشه، فعلاً همین نسخه می‌مونه', 'info');
-                    return { ok: true, text: 'نسخه جدید موجوده' };
+                    return { ok: true, text: 'نسخه جدید موجوده (رد شد)' };
                 }
                 await installUpdate(text, remoteVersion);
                 return { ok: true, text: '✅ نصب شد' };
             } catch (err) {
                 console.error(err);
-                showToast('❌ بررسی آپدیت ناموفق بود (اتصال یا سرور)', 'error');
-                return { ok: false, text: '❌ ناموفق' };
+                return { ok: false, text: '❌ بررسی آپدیت ناموفق بود' };
             }
         }
+
 
         // ==============================================
         // ===== Pull-to-refresh (pull down from the top -> checkForUpdate) =====
@@ -3608,7 +3612,7 @@
         async function fetchMessages(silent) {
             try {
                 const res = await fetch(MESSAGES_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
-                if (!res.ok) throw new Error('http ' + res.status);
+                if (!res.ok) throw new Error('HTTP ' + res.status + (res.status === 404 ? ' — فایل README.md پیدا نشد' : ''));
                 const text = await res.text();
                 const seenHash = localStorage.getItem('messagesSeenHash');
                 const newHash = simpleHash(text);
@@ -3618,7 +3622,7 @@
                 return { ok: true, text: text };
             } catch (err) {
                 if (!silent) console.error(err);
-                return { ok: false, text: null };
+                return { ok: false, text: null, error: (err && err.message) ? err.message : 'خطای شبکه' };
             }
         }
 
@@ -3660,8 +3664,10 @@
                 renderMessagesFromCache();
                 markMessagesSeen();
             } else if (!localStorage.getItem('messagesContent')) {
-                messagesBody.innerHTML = '<div class="messages-loading" style="color:#f87171;">❌ دریافت پیام‌ها ناموفق بود (اتصال یا فایل README.md یافت نشد)</div>';
+                messagesBody.innerHTML = '<div class="messages-loading" style="color:#f87171;">❌ دریافت پیام‌ها ناموفق بود<br>(' + escapeHtml(result.error || 'خطای شبکه') + ')</div>';
                 messagesUpdatedAt.textContent = '';
+            } else {
+                messagesUpdatedAt.textContent = '❌ ناموفق: ' + result.error;
             }
         }
 
@@ -3678,7 +3684,12 @@
                 const orig = messagesRefreshBtn.textContent;
                 messagesRefreshBtn.textContent = '⏳ ...';
                 const result = await fetchMessages(true);
-                if (result.ok) { renderMessagesFromCache(); markMessagesSeen(); }
+                if (result.ok) {
+                    renderMessagesFromCache();
+                    markMessagesSeen();
+                } else {
+                    messagesUpdatedAt.textContent = '❌ ناموفق: ' + result.error;
+                }
                 messagesRefreshBtn.textContent = orig;
                 messagesRefreshBtn.disabled = false;
             });
