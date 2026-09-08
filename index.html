@@ -7,7 +7,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Hidden Language">
+    <meta name="application-name" content="Hidden Language">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Hidden Language</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -498,9 +504,16 @@
             z-index: 5;
         }
         .dosham-btn-no:active { transform:scale(0.92); }
-        /* Styled like .toast/.switch-toast: a fixed bar docked at the top,
-           consistent with the app's other notification bars, instead of a
-           bubble sitting inline under the buttons. */
+        /* Matches .toast exactly in size/shape/typography, appearance animation,
+           disappearance animation, and even a countdown bar for "time left before
+           it goes away" — just a pink tint instead of success/error/info colors,
+           so it reads as "one of the app's notification bars" rather than a
+           one-off bubble. It needs its own translate(-50%, ...) keyframes (instead
+           of reusing .toast's translateY-only ones) because this bar centers
+           itself with left:50% + transform, whereas .toast sits inside
+           toast-container which already handles the horizontal centering — so a
+           translateY-only keyframe would wipe out the -50% and snap it to the
+           left edge mid-animation. Same timing/easing/distance as .toast either way. */
         .dosham-response {
             position: fixed;
             top: 10px;
@@ -508,35 +521,56 @@
             width: 92%;
             max-width: 380px;
             z-index: 99997;
-            font-size: 0.85rem;
-            color: #ffd9ec;
+            font-size: 0.65rem;
+            color: white;
             font-weight: 700;
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 8px;
+            justify-content: flex-start;
+            gap: 6px;
             flex-wrap: nowrap;
-            background: rgba(30,20,48,0.88);
+            background: rgba(219,39,119,0.55);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
             border-radius: 12px;
-            padding: 8px 14px;
-            border: 1px solid rgba(255,150,210,0.12);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-            transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22,1,0.36,1);
+            padding: 6px 12px;
+            border: 1px solid rgba(255,255,255,0.02);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+            font-family: -apple-system,'Helvetica Neue','Segoe UI','Apple Color Emoji',sans-serif;
+            overflow: hidden;
             transform: translate(-50%, 0);
             opacity: 1;
         }
         .dosham-response.hidden {
             opacity:0;
-            transform: translate(-50%, -16px);
+            transform: translate(-50%, -20px) scale(0.94);
             pointer-events:none;
         }
+        @keyframes doshamBarSlideIn {
+            from { opacity:0; transform:translate(-50%, -20px) scale(0.94); }
+            to   { opacity:1; transform:translate(-50%, 0) scale(1); }
+        }
+        @keyframes doshamBarSlideOut {
+            from { opacity:1; transform:translate(-50%, 0) scale(1); }
+            to   { opacity:0; transform:translate(-50%, -20px) scale(0.94); }
+        }
         .dosham-response .big-emoji {
-            font-size:1.3rem;
-            animation:bounceEmoji 1.2s infinite;
+            font-size:1rem;
             font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif !important;
             flex-shrink:0;
+        }
+        .dosham-response #doshamResponseText {
+            flex:1;
+            text-align:right;
+            line-height:1.4;
+        }
+        .dosham-response .dosham-progress {
+            position:absolute;
+            bottom:0;
+            left:0;
+            height:2px;
+            border-radius:0 0 12px 12px;
+            background:rgba(255,255,255,0.1);
         }
 
         /* ===== Main UI ===== */
@@ -606,12 +640,17 @@
             outline:none;
             padding:8px 10px;
             direction:rtl;
-            min-height:70px;
+            min-height:104px;
             height:auto;
             overflow-y:hidden;
             transition:all 0.15s ease;
             line-height:1.7;
+            scroll-behavior:smooth;
+            -webkit-overflow-scrolling:touch;
         }
+        textarea::-webkit-scrollbar { width:3px; }
+        textarea::-webkit-scrollbar-track { background:rgba(10,8,28,0.05); border-radius:10px; }
+        textarea::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.08); border-radius:10px; }
         textarea:focus {
             border-color:rgba(139,92,246,0.08);
             background:rgba(15,12,30,0.35);
@@ -1204,7 +1243,7 @@
             .modal-search input { font-size:0.55rem; }
             .result-text { font-size:0.75rem; max-height:4.2em; }
             .result-area { padding:4px 8px !important; }
-            textarea { font-size:0.75rem; padding:6px 8px; min-height:55px; }
+            textarea { font-size:0.75rem; padding:6px 8px; min-height:94px; }
             h1 { font-size:1rem; }
             .time { font-size:0.7rem; }
             .menu-btn, .help-btn { width:24px; height:24px; font-size:0.65rem; }
@@ -1216,13 +1255,13 @@
             .dosham-question { font-size:1.6rem; min-height:50px; }
             .dosham-question .emoji-big { font-size:2rem; }
             .dosham-btn { padding:10px 24px; font-size:1rem; min-width:70px; }
-            .dosham-response { font-size:1rem; padding:6px 12px; }
+            .dosham-response { font-size:0.65rem; padding:6px 12px; }
         }
         @media (max-width:380px) {
             .time { font-size:0.65rem; }
             .time.meaning-mode { font-size:0.5rem; min-width:50px; }
             .menu-btn, .help-btn { width:22px; height:22px; font-size:0.6rem; }
-            textarea { font-size:0.7rem; padding:5px 6px; min-height:45px; }
+            textarea { font-size:0.7rem; padding:5px 6px; min-height:87px; }
             .result-text { font-size:0.7rem; max-height:4em; }
             .fullscreen-box .fs-content { font-size:0.75rem; }
             .menu-dropdown { min-width:220px; padding:14px 14px; }
@@ -1230,7 +1269,7 @@
             .dosham-question { font-size:1.3rem; min-height:40px; }
             .dosham-question .emoji-big { font-size:1.6rem; }
             .dosham-btn { padding:8px 16px; font-size:0.85rem; min-width:60px; }
-            .dosham-response { font-size:0.85rem; }
+            .dosham-response { font-size:0.6rem; }
         }
     </style>
 </head>
@@ -1275,6 +1314,18 @@
 
     <!-- ===== Toast Container ===== -->
     <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ===== Dosham Response Bar =====
+         Lives here at body level (not inside .dosham-card) so its
+         position:fixed is relative to the real viewport, exactly like
+         toastContainer/switchToast above — nesting it inside
+         .dosham-card would put it under that card's backdrop-filter,
+         which creates its own containing block and would silently pin
+         the bar to the card instead of the top of the screen. -->
+    <div class="dosham-response hidden" id="doshamResponse">
+        <span class="big-emoji">💖</span> <span id="doshamResponseText"></span>
+        <span class="dosham-progress" id="doshamProgress"></span>
+    </div>
 
     <!-- ===== Modal ===== -->
     <div class="modal-overlay" id="modalOverlay">
@@ -1326,8 +1377,14 @@
         <div class="menu-divider"></div>
         <button class="menu-item" data-app="dosham" id="menuDosham">
             <span class="item-icon">🥺</span>
-            Dosham dalli?
+            Dosham Dalli؟
             <span class="item-badge enter" id="badgeDosham">ورود</span>
+        </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" id="menuUpdate">
+            <span class="item-icon">🔄</span>
+            بررسی آپدیت
+            <span class="item-badge" id="badgeUpdate">نسخه <span id="badgeUpdateVersion"></span></span>
         </button>
     </div>
 
@@ -1388,10 +1445,6 @@
                 <div class="dosham-btn-group" id="doshamBtnGroup">
                     <button class="dosham-btn dosham-btn-yes" id="doshamBtnYes">آره 🥺</button>
                     <button class="dosham-btn dosham-btn-no" id="doshamBtnNo"><span style="font-size:1.4rem;font-family:'Apple Color Emoji','Segoe UI Emoji',sans-serif;">😒</span> نه</button>
-                </div>
-
-                <div class="dosham-response hidden" id="doshamResponse">
-                    <span class="big-emoji">💖</span> <span id="doshamResponseText"></span>
                 </div>
             </div>
         </div>
@@ -1558,6 +1611,13 @@
                         } else {
                             // OTHER: English/emoji/styled-Unicode/anything-else, left
                             // completely untouched and isolated so it always renders LTR.
+                            // Exception: the Persian/Arabic question mark ؟ is swapped for
+                            // the plain ASCII "?" here. ؟ has weak/neutral bidi behavior of
+                            // its own (unlike a letter), so when it sits right next to an
+                            // emoji inside an LTR isolate the two can still visually swap
+                            // order depending on the surrounding RTL/LTR context. Plain "?"
+                            // has none of that ambiguity, so the order next to the emoji
+                            // stays put everywhere this gets pasted.
                             if (greekBuffer.length > 0) {
                                 currentWord.push('|' + greekBuffer.join('_') + '|');
                                 greekBuffer = [];
@@ -1566,7 +1626,7 @@
                                 outputParts.push(currentWord.join('_'));
                                 currentWord = [];
                             }
-                            outputParts.push(isolateLTR(tokenValue));
+                            outputParts.push(isolateLTR(tokenValue.replace(/؟/g, '?')));
                         }
                     }
                     if (greekBuffer.length > 0) {
@@ -1636,8 +1696,10 @@
                             } else if (tokenType === 'OTHER') {
                                 // English/emoji/styled-Unicode/anything-else, left
                                 // completely untouched and isolated so it always renders
-                                // LTR even inside an RTL (Persian) line.
-                                currentWord += isolateLTR(tokenValue);
+                                // LTR even inside an RTL (Persian) line. Mirror image of
+                                // encode()'s ؟→? swap: turn the ASCII "?" back into the
+                                // Persian/Arabic ؟ for the decoded (Persian) side.
+                                currentWord += isolateLTR(tokenValue.replace(/\?/g, '؟'));
                             }
                         }
                         if (currentWord) {
@@ -1889,19 +1951,35 @@
             clearTimeout(tooltipHideTimer);
             tooltipHideTimer = setTimeout(() => { tooltip.classList.remove('show'); }, 2000);
 
-            const scrollHandler = () => {
+            const hideTooltip = () => {
                 tooltip.classList.remove('show');
                 clearTimeout(tooltipHideTimer);
-                document.removeEventListener('scroll', scrollHandler);
-            };
-            document.addEventListener('scroll', scrollHandler, { once: true, passive: true });
-
-            const modalCloseHandler = () => {
-                tooltip.classList.remove('show');
-                clearTimeout(tooltipHideTimer);
+                document.removeEventListener('scroll', scrollHandler, true);
                 document.removeEventListener('modalClosed', modalCloseHandler);
+                document.removeEventListener('mousedown', outsideClickHandler, true);
+                document.removeEventListener('touchstart', outsideClickHandler, true);
             };
+
+            // Capture phase + attached on `document`: scroll events from an
+            // internally-scrolling element (like #modalBody, which has its
+            // own overflow-y:auto and never bubbles a 'scroll' event up to
+            // document) are still caught here, since capture fires on the
+            // way down through every ancestor including the scrolling one.
+            const scrollHandler = () => hideTooltip();
+            document.addEventListener('scroll', scrollHandler, { capture: true, passive: true });
+
+            const modalCloseHandler = () => hideTooltip();
             document.addEventListener('modalClosed', modalCloseHandler, { once: true });
+
+            // Tapping/clicking anywhere outside the tooltip itself (or the
+            // "!" button that opened it) also closes it.
+            const outsideClickHandler = (ev) => {
+                if (ev.target === tooltip || tooltip.contains(ev.target)) return;
+                if (ev.target.closest && ev.target.closest('.m-source-btn, .sr-source-btn')) return;
+                hideTooltip();
+            };
+            document.addEventListener('mousedown', outsideClickHandler, true);
+            document.addEventListener('touchstart', outsideClickHandler, true);
         }
 
         // ==============================================
@@ -2063,7 +2141,7 @@
             void switchBar.offsetWidth;
             switchBar.style.animation = 'switchBar 2s linear forwards';
 
-            const targetName = app === 'dosham' ? 'Dosham dalli?' : 'Hidden Language';
+            const targetName = app === 'dosham' ? 'Dosham Dalli؟' : 'Hidden Language';
             const targetIcon = app === 'dosham' ? '🥺' : '🤫';
 
             switchIcon.textContent = targetIcon;
@@ -2094,6 +2172,10 @@
                     appDosham.classList.add('hidden');
                     appSecret.classList.remove('hidden');
                     currentApp = 'secret';
+                    // Nothing typed/decoded in Dosham should leak onto the
+                    // Hidden Language screen (or its "log") once we arrive —
+                    // start it clean every time, same as autoClear() does.
+                    if (typeof autoClear === 'function') autoClear();
                     setBadgeDone(targetBadge, 'فعلی', true);
                     setBadgeDone(currentBadge, 'ورود', false);
                     enteringEl = appSecret;
@@ -2113,7 +2195,7 @@
 
                 // Success message with the app icon
                 const emoji = app === 'dosham' ? '🥺' : '🤫';
-                const name = app === 'dosham' ? 'Dosham dalli?' : 'Hidden Language';
+                const name = app === 'dosham' ? 'Dosham Dalli؟' : 'Hidden Language';
                 showToast(`${emoji} به ${name} خوش آمدید!`, 'success', 1800);
 
                 // Burst sparks for extra flair
@@ -2159,6 +2241,46 @@
             'باش پس میتونی منو بزن😂'
         ];
 
+        const doshamProgress = document.getElementById('doshamProgress');
+
+        // Plays the same slide-in-and-pop-in used by every toast in this app.
+        // Re-triggered from scratch on every call (via the "animation:none" +
+        // reflow + real value trick, same one already used for switchBar below)
+        // so a message that appears mid-way through the previous one's exit
+        // still gets a clean entrance instead of a frozen mid-animation state.
+        function doshamBarShow() {
+            doshamResponse.classList.remove('hidden');
+            doshamResponse.style.animation = 'none';
+            void doshamResponse.offsetWidth;
+            doshamResponse.style.animation = 'doshamBarSlideIn 0.3s cubic-bezier(0.22,1,0.36,1) both';
+        }
+
+        // Plays the same slide-out used by every toast, then parks the bar in
+        // its permanent .hidden state once the animation has actually finished
+        // (matching how .toast waits for its own slide-out before it's removed).
+        // Sets the animation directly via inline style (same trick as show/
+        // progress below) rather than through a class — a leftover inline
+        // animation from doshamBarShow() has higher specificity than any class
+        // rule and would otherwise silently block this from ever playing.
+        function doshamBarHide() {
+            doshamResponse.style.animation = 'none';
+            void doshamResponse.offsetWidth;
+            doshamResponse.style.animation = 'doshamBarSlideOut 0.25s cubic-bezier(0.22,1,0.36,1) forwards';
+            setTimeout(() => {
+                doshamResponse.style.animation = '';
+                doshamResponse.classList.add('hidden');
+            }, 250);
+        }
+
+        // Same shrinking countdown strip every toast shows for how much longer
+        // it'll stay up, just re-timed per call since this bar's visible
+        // duration isn't a fixed 2.5s like a plain toast.
+        function doshamBarProgress(durationMs) {
+            doshamProgress.style.animation = 'none';
+            void doshamProgress.offsetWidth;
+            doshamProgress.style.animation = `toastProgress ${durationMs / 1000}s linear forwards`;
+        }
+
         function doshamTypewriterEffect(element, text, speed = 30, callback) {
             if (doshamTypewriterTimer) { clearTimeout(doshamTypewriterTimer);
                 doshamTypewriterTimer = null; }
@@ -2175,7 +2297,7 @@
                 } else {
                     doshamHideTimer = setTimeout(() => {
                         if (!doshamAnswered) {
-                            doshamResponse.classList.add('hidden');
+                            doshamBarHide();
                             if (callback) callback();
                         }
                     }, 5000);
@@ -2190,7 +2312,10 @@
                 doshamTypewriterTimer = null; }
             if (doshamHideTimer) { clearTimeout(doshamHideTimer);
                 doshamHideTimer = null; }
-            doshamResponse.classList.remove('hidden');
+            doshamBarShow();
+            // Total time on screen is the typing animation plus the 5s wait
+            // doshamTypewriterEffect starts once typing finishes above.
+            doshamBarProgress(msg.length * 25 + 5000);
             document.querySelector('#doshamResponse .big-emoji').textContent = '💬';
             doshamTypewriterEffect(doshamResponseText, msg, 25);
         }
@@ -2220,7 +2345,11 @@
                 group.appendChild(doshamBtnYes);
                 group.appendChild(doshamBtnNo);
             }
+            // A forced/instant reset (app switch, fresh open), not a natural
+            // expiry — snap it straight to hidden rather than sliding it out.
+            doshamResponse.style.animation = '';
             doshamResponse.classList.add('hidden');
+            doshamProgress.style.animation = 'none';
             doshamResponseText.textContent = '';
             document.querySelector('#doshamResponse .big-emoji').textContent = '💖';
             doshamQuestionText.style.fontSize = '';
@@ -2352,7 +2481,8 @@
             dropHearts(40);
             burstSparks(e.clientX || rect.left + rect.width / 2, e.clientY || rect.top + rect.height / 2, 25);
 
-            doshamResponse.classList.remove('hidden');
+            doshamBarShow();
+            doshamBarProgress(6000);
             document.querySelector('#doshamResponse .big-emoji').textContent = '🫠';
             doshamTypewriterEffect(doshamResponseText, 'مودونشتم دوشم دایی🥺🫠', 30);
 
@@ -2363,8 +2493,11 @@
             if (navigator.vibrate) navigator.vibrate([40, 30, 40, 30, 60]);
 
             setTimeout(() => {
-                doshamFullReset();
-                setTimeout(() => dropHearts(8), 300);
+                doshamBarHide();
+                setTimeout(() => {
+                    doshamFullReset();
+                    setTimeout(() => dropHearts(8), 300);
+                }, 250);
             }, 6000);
         });
 
@@ -2934,9 +3067,23 @@
             outputDiv.setAttribute('dir', /[ا-ی]/.test(result) ? 'rtl' : 'ltr');
         }
 
+        // Grows the box naturally as the person types, but only up to 5 lines —
+        // past that it stops growing and scrolls internally instead, so the box
+        // itself never gets any taller. The 5-line cap is computed from the
+        // textarea's own current line-height/padding/border (read live via
+        // getComputedStyle) rather than a hardcoded pixel number, so it stays
+        // correct across the 480px/380px breakpoints where font-size and padding
+        // both change.
         function autoResizeTextarea() {
+            const cs = getComputedStyle(inputBox);
+            const lineHeight = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.7);
+            const vertical = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) +
+                parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+            const maxHeight = lineHeight * 5 + vertical;
             inputBox.style.height = 'auto';
-            inputBox.style.height = Math.min(inputBox.scrollHeight, 120) + 'px';
+            const needed = inputBox.scrollHeight;
+            inputBox.style.height = Math.min(needed, maxHeight) + 'px';
+            inputBox.style.overflowY = needed > maxHeight ? 'auto' : 'hidden';
         }
 
         inputBox.addEventListener('input', function() {
@@ -3001,7 +3148,112 @@
             setBadgeDone(badgeDosham, 'ورود', false);
         }
 
-        console.log('✅ Hidden Language راه‌اندازی شد');
+        // ==============================================
+        // ===== PWA: install as an app (Windows + Android) =====
+        // ==============================================
+        // Registering the service worker is what lets Chrome/Edge offer
+        // "Install app" on Windows and Android, and is also what makes the
+        // manual update button below able to "install" a new index.html
+        // (see sw.js: it caches the document and always serves that cached
+        // copy first, so writing a new copy into the cache + reloading is
+        // effectively "downloading and running" the update).
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.error('SW register failed:', err));
+            });
+        }
+
+        // ==============================================
+        // ===== Manual update check (GitHub repo) =====
+        // ==============================================
+        // Bump this string (and push the change to the repo below) whenever
+        // a new index.html is published. Nothing here ever runs on its own —
+        // it only fires when the person taps "بررسی آپدیت" in the menu, and
+        // it only overwrites the installed copy after they confirm the
+        // prompt. Offline: fetch fails, so we just say so and keep using
+        // whatever is already installed/cached.
+        const APP_VERSION = '2026.09.08.1';
+        const UPDATE_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/index.html';
+        const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
+
+        function extractAppVersion(htmlText) {
+            const m = htmlText.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+            return m ? m[1] : null;
+        }
+
+        async function installUpdate(html, version) {
+            try {
+                showToast('⬇️ در حال نصب نسخه جدید...', 'info', 2000);
+                if ('caches' in window) {
+                    const cache = await caches.open(UPDATE_CACHE_NAME);
+                    const makeResponse = () => new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+                    const docUrl = location.href.split('#')[0].split('?')[0];
+                    await cache.put(new Request(docUrl), makeResponse());
+                    await cache.put(new Request('./'), makeResponse());
+                    await cache.put(new Request('./index.html'), makeResponse());
+                }
+                localStorage.setItem('installedVersion', version);
+                showToast('✅ نصب شد! در حال بازکردن نسخه جدید...', 'success', 1600);
+                setTimeout(() => location.reload(), 800);
+            } catch (err) {
+                console.error(err);
+                showToast('❌ نصب آپدیت ناموفق بود', 'error');
+            }
+        }
+
+        async function checkForUpdate() {
+            const badge = document.getElementById('badgeUpdate');
+            if (!navigator.onLine) {
+                showToast('📴 آفلاین هستید؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه', 'info');
+                return;
+            }
+            if (badge) setBadgeLoading(badge);
+            showToast('🔄 در حال بررسی آپدیت...', 'info', 1600);
+            try {
+                const res = await fetch(UPDATE_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
+                if (!res.ok) throw new Error('http ' + res.status);
+                const text = await res.text();
+                const remoteVersion = extractAppVersion(text);
+                if (!remoteVersion) throw new Error('no version marker found');
+                if (remoteVersion === APP_VERSION) {
+                    showToast('✅ شما آخرین نسخه رو دارید (' + APP_VERSION + ')', 'success');
+                    if (badge) setBadgeDone(badge, 'بروزه', false);
+                    const v = document.getElementById('badgeUpdateVersion');
+                    if (v) v.textContent = APP_VERSION;
+                    return;
+                }
+                if (badge) setBadgeDone(badge, 'جدید!', true);
+                const ok = confirm(
+                    '🎉 نسخه جدیدی موجوده!\n\nنسخه فعلی: ' + APP_VERSION +
+                    '\nنسخه جدید: ' + remoteVersion +
+                    '\n\nدانلود و نصب بشه؟'
+                );
+                if (!ok) {
+                    showToast('باشه، فعلاً همین نسخه می‌مونه', 'info');
+                    const v = document.getElementById('badgeUpdateVersion');
+                    if (v) v.textContent = APP_VERSION;
+                    return;
+                }
+                await installUpdate(text, remoteVersion);
+            } catch (err) {
+                console.error(err);
+                if (badge) setBadgeDone(badge, 'بررسی', false);
+                showToast('❌ بررسی آپدیت ناموفق بود (اتصال یا سرور)', 'error');
+            }
+        }
+
+        const menuUpdateBtn = document.getElementById('menuUpdate');
+        if (menuUpdateBtn) {
+            menuUpdateBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                closeMenu();
+                checkForUpdate();
+            });
+        }
+
+        { const v = document.getElementById('badgeUpdateVersion'); if (v) v.textContent = APP_VERSION; }
+
+        console.log('✅ Hidden Language با قابلیت‌های کامل راه‌اندازی شد!');
     </script>
 </body>
 </html>
