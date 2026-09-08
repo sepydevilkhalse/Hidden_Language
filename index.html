@@ -1026,39 +1026,150 @@
             position:fixed;
             top:0;
             left:50%;
-            transform:translateX(-50%) translateY(-60px);
+            transform:translateX(-50%) translateY(-78px) scale(0.82);
             z-index:998;
             display:flex;
+            flex-direction:column;
             align-items:center;
-            gap:6px;
-            padding:8px 16px;
-            border-radius:0 0 16px 16px;
-            background:rgba(30,24,54,0.55);
-            backdrop-filter:blur(14px);
-            -webkit-backdrop-filter:blur(14px);
-            border:1px solid rgba(139,92,246,0.15);
-            border-top:none;
-            box-shadow:0 8px 24px rgba(0,0,0,0.25);
-            transition:transform 0.25s cubic-bezier(0.22,1,0.36,1), opacity 0.2s ease;
+            gap:5px;
+            padding:10px 16px 9px;
+            border-radius:20px;
+            background:rgba(30,24,54,0.6);
+            backdrop-filter:blur(16px);
+            -webkit-backdrop-filter:blur(16px);
+            border:1px solid rgba(139,92,246,0.18);
+            box-shadow:0 14px 34px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.02);
+            transition:transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s ease, background 0.3s ease, border-color 0.3s ease;
             opacity:0;
             pointer-events:none;
             white-space:nowrap;
         }
         .pull-refresh.visible { opacity:1; }
+        .pull-refresh.ready { border-color:rgba(52,211,153,0.3); }
+        .pull-refresh.success { background:rgba(16,54,42,0.68); border-color:rgba(52,211,153,0.35); }
+        .pull-refresh.error {
+            background:rgba(56,20,24,0.68);
+            border-color:rgba(248,113,113,0.35);
+            animation:pullRefreshShake 0.4s ease;
+        }
+        @keyframes pullRefreshShake {
+            10%,90% { margin-right:-2px; }
+            20%,80% { margin-right:3px; }
+            30%,50%,70% { margin-right:-4px; }
+            40%,60% { margin-right:4px; }
+        }
+        .pull-refresh-ring {
+            position:relative;
+            width:34px;
+            height:34px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            flex-shrink:0;
+        }
+        .pull-refresh-svg {
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            transform:rotate(-90deg);
+        }
+        .pull-refresh.spinning .pull-refresh-svg {
+            animation:pullRefreshRingSpin 0.85s linear infinite;
+        }
+        @keyframes pullRefreshRingSpin { from { transform:rotate(-90deg); } to { transform:rotate(270deg); } }
+        .pull-refresh-track {
+            fill:none;
+            stroke:rgba(139,92,246,0.14);
+            stroke-width:3;
+        }
+        .pull-refresh-progress {
+            fill:none;
+            stroke:#a78bfa;
+            stroke-width:3;
+            stroke-linecap:round;
+            stroke-dasharray:113.1;
+            stroke-dashoffset:113.1;
+            transition:stroke-dashoffset 0.05s linear, stroke 0.25s ease;
+        }
+        .pull-refresh.ready .pull-refresh-progress { stroke:#34d399; }
+        .pull-refresh.spinning .pull-refresh-progress { stroke-dashoffset:75 !important; stroke:#a78bfa; }
+        .pull-refresh.success .pull-refresh-progress { stroke-dashoffset:0 !important; stroke:#34d399; transition:stroke-dashoffset 0.45s cubic-bezier(0.22,1,0.36,1), stroke 0.25s ease; }
+        .pull-refresh.error .pull-refresh-progress { stroke-dashoffset:0 !important; stroke:#f87171; transition:stroke-dashoffset 0.45s cubic-bezier(0.22,1,0.36,1), stroke 0.25s ease; }
         .pull-refresh-icon {
+            position:absolute;
             display:inline-block;
-            font-size:1rem;
-            transition:transform 0.1s linear;
+            font-size:0.95rem;
+            font-style:normal;
+            color:#c4b5fd;
+            font-weight:700;
+            transition:transform 0.12s ease-out, color 0.25s ease;
         }
-        .pull-refresh.spinning .pull-refresh-icon {
-            animation:pullRefreshSpin 0.8s linear infinite;
+        .pull-refresh.ready .pull-refresh-icon { color:#34d399; }
+        .pull-refresh.spinning .pull-refresh-icon { opacity:0; }
+        .pull-refresh.success .pull-refresh-icon, .pull-refresh.error .pull-refresh-icon {
+            opacity:1;
+            transform:none !important;
+            animation:pullRefreshIconPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
         }
-        @keyframes pullRefreshSpin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+        .pull-refresh.success .pull-refresh-icon { color:#34d399; }
+        .pull-refresh.error .pull-refresh-icon { color:#f87171; }
+        @keyframes pullRefreshIconPop {
+            from { transform:scale(0.3) !important; opacity:0; }
+            to { transform:scale(1) !important; opacity:1; }
+        }
         .pull-refresh-text {
-            font-size:0.68rem;
+            font-size:0.62rem;
             font-weight:700;
             color:#c4b5fd;
+            transition:color 0.25s ease;
         }
+        .pull-refresh.ready .pull-refresh-text { color:#34d399; }
+        .pull-refresh.success .pull-refresh-text { color:#6ee7b7; }
+        .pull-refresh.error .pull-refresh-text { color:#fca5a5; }
+
+        /* ===== Messages panel (from GitHub README) ===== */
+        #messagesBtn { position:relative; }
+        .msg-dot {
+            position:absolute;
+            top:-1px;
+            left:-1px;
+            width:8px;
+            height:8px;
+            border-radius:50%;
+            background:#f87171;
+            border:1.5px solid rgba(20,16,40,0.9);
+            box-shadow:0 0 6px rgba(248,113,113,0.6);
+            display:none;
+        }
+        .msg-dot.show { display:block; animation:msgDotPulse 1.6s ease-in-out infinite; }
+        @keyframes msgDotPulse {
+            0%,100% { transform:scale(1); opacity:1; }
+            50% { transform:scale(1.3); opacity:0.7; }
+        }
+        .messages-body h1, .messages-body h2, .messages-body h3 {
+            color:#c4b5fd;
+            font-size:0.85rem;
+            margin:10px 0 5px;
+            font-weight:700;
+            line-height:1.6;
+        }
+        .messages-body h1:first-child, .messages-body h2:first-child, .messages-body h3:first-child { margin-top:0; }
+        .messages-body p { margin:0 0 8px; }
+        .messages-body ul { margin:0 0 8px; padding-right:18px; display:flex; flex-direction:column; gap:2px; }
+        .messages-body li { font-size:0.68rem; }
+        .messages-body strong { color:#f1f5f9; }
+        .messages-body em { color:#a78bfa; font-style:normal; }
+        .messages-body a { color:#a78bfa; text-decoration:underline; }
+        .messages-body blockquote {
+            border-right:2px solid rgba(139,92,246,0.28);
+            padding:2px 10px 2px 2px;
+            margin:4px 0 8px;
+            color:#b8b8d4;
+            font-size:0.65rem;
+        }
+        .messages-body hr { border:none; border-top:1px solid rgba(139,92,246,0.08); margin:10px 0; }
+        .messages-loading { text-align:center; color:#8a8aaa; font-size:0.65rem; padding:18px 0; }
 
         /* ===== Toast ===== */
         .toast-container {
@@ -1356,8 +1467,34 @@
 
     <!-- ===== Pull-to-refresh (checks for update) ===== -->
     <div class="pull-refresh" id="pullRefresh">
-        <span class="pull-refresh-icon" id="pullRefreshIcon">🔄</span>
+        <div class="pull-refresh-ring">
+            <svg class="pull-refresh-svg" viewBox="0 0 40 40">
+                <circle class="pull-refresh-track" cx="20" cy="20" r="18"></circle>
+                <circle class="pull-refresh-progress" id="pullRefreshProgress" cx="20" cy="20" r="18"></circle>
+            </svg>
+            <span class="pull-refresh-icon" id="pullRefreshIcon">↓</span>
+        </div>
         <span class="pull-refresh-text" id="pullRefreshText">بکش برای بررسی آپدیت</span>
+    </div>
+
+    <!-- ===== Messages Panel (synced from GitHub README) ===== -->
+    <div class="modal-overlay" id="messagesOverlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div class="modal-header-icon">📢</div>
+                <div>
+                    <div class="modal-header-title">پیام‌ها</div>
+                    <div class="modal-header-sub" id="messagesUpdatedAt">...</div>
+                </div>
+            </div>
+            <div class="modal-body messages-body" id="messagesBody">
+                <div class="messages-loading">در حال دریافت پیام‌ها...</div>
+            </div>
+            <div class="modal-footer" style="gap:8px;">
+                <button class="btn-modal-close" id="messagesRefreshBtn">🔄 بررسی مجدد</button>
+                <button class="btn-modal-close" onclick="closeMessages()">بستن ✕</button>
+            </div>
+        </div>
     </div>
 
     <!-- ===== Dosham Response Bar =====
@@ -1436,6 +1573,7 @@
                 <div class="nearest-hour" id="nearestHour">⏳ نزدیک‌ترین: <span class="nh-time">--:--</span> <span class="nh-meaning">...</span> <span class="nh-source"></span></div>
                 <div class="header-actions">
                     <button class="menu-btn" id="menuBtn" title="سوئیچ برنامه">☰</button>
+                    <button class="menu-btn" id="messagesBtn" title="پیام‌ها">📢<span class="msg-dot" id="msgDot"></span></button>
                     <button class="help-btn" id="helpBtn" title="مشاهده همه معانی ساعت‌ها">!</button>
                 </div>
             </div>
@@ -3246,6 +3384,7 @@
         // show a final result before it fades away; the toasts (kept from
         // before) still carry the fuller message.
         async function checkForUpdate() {
+            fetchMessages(true); // quietly sync the messages panel in the background too
             if (!navigator.onLine) {
                 showToast('📴 آفلاین هستید؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه', 'info');
                 return { ok: false, text: '📴 آفلاین' };
@@ -3286,16 +3425,23 @@
             const el = document.getElementById('pullRefresh');
             const iconEl = document.getElementById('pullRefreshIcon');
             const textEl = document.getElementById('pullRefreshText');
-            if (!el || !iconEl || !textEl) return;
+            const progressEl = document.getElementById('pullRefreshProgress');
+            if (!el || !iconEl || !textEl || !progressEl) return;
 
-            const THRESHOLD = 70;  // px of pull needed to trigger a check
-            const MAX_PULL = 110;  // visual cap so the indicator can't fly off forever
+            const THRESHOLD = 70;   // px of pull needed to trigger a check
+            const MAX_PULL = 110;   // visual cap so the indicator can't fly off forever
             const RESISTANCE = 0.5;
+            const RING_CIRCUMFERENCE = 113.1; // 2 * PI * r(18), matches the SVG circle radius
             let startY = 0;
             let lastPullPx = 0;
             let dragging = false;   // finger is down and we're watching it
             let pulling = false;    // confirmed downward drag from the very top
             let checking = false;   // an update check is in flight
+            let wasReady = false;   // whether we've already buzzed for crossing the threshold
+
+            function vibrate(ms) {
+                try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
+            }
 
             function getScrollTop() {
                 return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
@@ -3303,20 +3449,31 @@
 
             function paint(px) {
                 lastPullPx = Math.max(0, Math.min(MAX_PULL, px));
-                const progress = lastPullPx / THRESHOLD;
+                const progress = Math.min(1, lastPullPx / THRESHOLD);
                 el.classList.add('visible');
-                el.style.transform = 'translateX(-50%) translateY(' + (-60 + lastPullPx) + 'px)';
-                el.style.opacity = String(Math.min(1, lastPullPx / 30));
-                iconEl.style.transform = 'rotate(' + (Math.min(1, progress) * 180) + 'deg)';
-                textEl.textContent = progress >= 1 ? 'رها کن تا بررسی بشه' : 'بکش برای بررسی آپدیت';
+                el.style.transform = 'translateX(-50%) translateY(' + (-78 + lastPullPx) + 'px) scale(' + (0.82 + progress * 0.18) + ')';
+                el.style.opacity = String(Math.min(1, lastPullPx / 26));
+                iconEl.style.transform = 'rotate(' + (progress * 180) + 'deg)';
+                progressEl.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - progress));
+                if (progress >= 1) {
+                    if (!wasReady) { wasReady = true; vibrate(10); }
+                    el.classList.add('ready');
+                    textEl.textContent = 'رها کن تا بررسی بشه';
+                } else {
+                    wasReady = false;
+                    el.classList.remove('ready');
+                    textEl.textContent = 'بکش برای بررسی آپدیت';
+                }
             }
 
             function resetVisual() {
-                el.classList.remove('visible');
-                el.style.transform = 'translateX(-50%) translateY(-60px)';
+                el.classList.remove('visible', 'ready', 'spinning', 'success', 'error');
+                el.style.transform = 'translateX(-50%) translateY(-78px) scale(0.82)';
                 el.style.opacity = '0';
                 iconEl.style.transform = 'rotate(0deg)';
-                el.classList.remove('spinning');
+                iconEl.textContent = '↓';
+                progressEl.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+                wasReady = false;
             }
 
             function endDrag() {
@@ -3348,26 +3505,190 @@
                 pulling = false;
                 if (lastPullPx < THRESHOLD) { resetVisual(); return; }
 
+                vibrate(15);
                 checking = true;
+                el.classList.remove('ready');
                 el.classList.add('visible', 'spinning');
-                el.style.transform = 'translateX(-50%) translateY(14px)';
+                el.style.transform = 'translateX(-50%) translateY(14px) scale(1)';
                 el.style.opacity = '1';
                 iconEl.style.transform = 'rotate(0deg)';
+                progressEl.style.strokeDashoffset = '';
                 textEl.textContent = 'در حال بررسی آپدیت...';
 
+                function finish(ok, text) {
+                    el.classList.remove('spinning');
+                    el.classList.add(ok ? 'success' : 'error');
+                    iconEl.textContent = ok ? '✓' : '✕';
+                    textEl.textContent = text || (ok ? 'انجام شد' : '❌ ناموفق');
+                    if (!ok) vibrate([12, 40, 12]);
+                    setTimeout(() => { checking = false; resetVisual(); }, 1300);
+                }
+
                 checkForUpdate().then((result) => {
-                    textEl.textContent = (result && result.text) ? result.text : 'انجام شد';
-                    el.classList.remove('spinning');
-                    setTimeout(() => { checking = false; resetVisual(); }, 1200);
+                    finish(!!(result && result.ok), result && result.text);
                 }).catch(() => {
-                    textEl.textContent = '❌ ناموفق';
-                    el.classList.remove('spinning');
-                    setTimeout(() => { checking = false; resetVisual(); }, 1200);
+                    finish(false, '❌ ناموفق');
                 });
             }, { passive: true });
 
             document.addEventListener('touchcancel', function() { endDrag(); }, { passive: true });
         })();
+
+        // ==============================================
+        // ===== Messages panel (synced from the GitHub README) =====
+        // ==============================================
+        // The developer "broadcasts" to every installed copy of the app just
+        // by editing README.md in the same GitHub repo used for updates.
+        // This panel fetches that file fresh every time it's opened (and
+        // quietly in the background during pull-to-refresh) and renders it
+        // with a tiny, safe, markdown-lite parser — no server, no accounts,
+        // just a file on GitHub acting as a one-way message board.
+        const MESSAGES_REPO_RAW = 'https://raw.githubusercontent.com/sepydevilkhalse/vs-code/main/README.md';
+
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function simpleHash(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+            return h.toString(36);
+        }
+
+        function mdInline(t) {
+            t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, text, url) => {
+                const safeUrl = /^https?:\/\//i.test(url) ? url : '#';
+                return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+            });
+            t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            t = t.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+            return t;
+        }
+
+        function renderMarkdownLite(md) {
+            const lines = escapeHtml(md).replace(/\r\n/g, '\n').split('\n');
+            let html = '', inList = false, paraBuffer = [];
+            function flushPara() { if (paraBuffer.length) { html += '<p>' + paraBuffer.join('<br>') + '</p>'; paraBuffer = []; } }
+            function closeList() { if (inList) { html += '</ul>'; inList = false; } }
+            for (const raw of lines) {
+                const line = raw.trim();
+                if (!line) { flushPara(); closeList(); continue; }
+                if (/^---+$/.test(line)) { flushPara(); closeList(); html += '<hr>'; continue; }
+                let m;
+                if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
+                    flushPara(); closeList();
+                    html += '<h' + m[1].length + '>' + mdInline(m[2]) + '</h' + m[1].length + '>';
+                    continue;
+                }
+                if ((m = line.match(/^[-*]\s+(.*)$/))) {
+                    flushPara();
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += '<li>' + mdInline(m[1]) + '</li>';
+                    continue;
+                }
+                if ((m = line.match(/^&gt;\s?(.*)$/))) {
+                    flushPara(); closeList();
+                    html += '<blockquote>' + mdInline(m[1]) + '</blockquote>';
+                    continue;
+                }
+                closeList();
+                paraBuffer.push(mdInline(line));
+            }
+            flushPara(); closeList();
+            return html || '<p style="color:#6a6a8a;">(پیامی موجود نیست)</p>';
+        }
+
+        const messagesOverlay = document.getElementById('messagesOverlay');
+        const messagesBody = document.getElementById('messagesBody');
+        const messagesUpdatedAt = document.getElementById('messagesUpdatedAt');
+        const messagesBtn = document.getElementById('messagesBtn');
+        const msgDot = document.getElementById('msgDot');
+        const messagesRefreshBtn = document.getElementById('messagesRefreshBtn');
+
+        async function fetchMessages(silent) {
+            try {
+                const res = await fetch(MESSAGES_REPO_RAW + '?t=' + Date.now(), { cache: 'no-store' });
+                if (!res.ok) throw new Error('http ' + res.status);
+                const text = await res.text();
+                const seenHash = localStorage.getItem('messagesSeenHash');
+                const newHash = simpleHash(text);
+                localStorage.setItem('messagesContent', text);
+                localStorage.setItem('messagesFetchedAt', String(Date.now()));
+                if (newHash !== seenHash && msgDot) msgDot.classList.add('show');
+                return { ok: true, text: text };
+            } catch (err) {
+                if (!silent) console.error(err);
+                return { ok: false, text: null };
+            }
+        }
+
+        function markMessagesSeen() {
+            const content = localStorage.getItem('messagesContent') || '';
+            localStorage.setItem('messagesSeenHash', simpleHash(content));
+            if (msgDot) msgDot.classList.remove('show');
+        }
+
+        function formatTimeAgo(ts) {
+            if (!ts) return '';
+            const diffSec = Math.floor((Date.now() - ts) / 1000);
+            if (diffSec < 60) return 'همین الان بروزرسانی شد';
+            const diffMin = Math.floor(diffSec / 60);
+            if (diffMin < 60) return 'بروزرسانی: ' + diffMin + ' دقیقه پیش';
+            const diffH = Math.floor(diffMin / 60);
+            if (diffH < 24) return 'بروزرسانی: ' + diffH + ' ساعت پیش';
+            return 'بروزرسانی: ' + Math.floor(diffH / 24) + ' روز پیش';
+        }
+
+        function renderMessagesFromCache() {
+            const content = localStorage.getItem('messagesContent');
+            const fetchedAt = Number(localStorage.getItem('messagesFetchedAt') || 0);
+            if (content) {
+                messagesBody.innerHTML = renderMarkdownLite(content);
+                messagesUpdatedAt.textContent = formatTimeAgo(fetchedAt);
+            } else {
+                messagesBody.innerHTML = '<div class="messages-loading">در حال دریافت پیام‌ها...</div>';
+                messagesUpdatedAt.textContent = '...';
+            }
+        }
+
+        async function openMessages() {
+            messagesOverlay.classList.add('show');
+            renderMessagesFromCache();
+            markMessagesSeen();
+            const result = await fetchMessages(true);
+            if (result.ok) {
+                renderMessagesFromCache();
+                markMessagesSeen();
+            } else if (!localStorage.getItem('messagesContent')) {
+                messagesBody.innerHTML = '<div class="messages-loading" style="color:#f87171;">❌ دریافت پیام‌ها ناموفق بود (اتصال یا فایل README.md یافت نشد)</div>';
+                messagesUpdatedAt.textContent = '';
+            }
+        }
+
+        function closeMessages() {
+            messagesOverlay.classList.remove('show');
+        }
+
+        if (messagesBtn) {
+            messagesBtn.addEventListener('click', function(e) { e.stopPropagation(); openMessages(); });
+        }
+        if (messagesRefreshBtn) {
+            messagesRefreshBtn.addEventListener('click', async function() {
+                messagesRefreshBtn.disabled = true;
+                const orig = messagesRefreshBtn.textContent;
+                messagesRefreshBtn.textContent = '⏳ ...';
+                const result = await fetchMessages(true);
+                if (result.ok) { renderMessagesFromCache(); markMessagesSeen(); }
+                messagesRefreshBtn.textContent = orig;
+                messagesRefreshBtn.disabled = false;
+            });
+        }
+        if (messagesOverlay) {
+            messagesOverlay.addEventListener('click', function(e) { if (e.target === messagesOverlay) closeMessages(); });
+        }
+
+        // Silently sync the badge once on load, without opening anything
+        window.addEventListener('load', () => { fetchMessages(true); });
 
         console.log('✅ Hidden Language با قابلیت‌های کامل راه‌اندازی شد!');
     </script>
