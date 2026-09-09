@@ -1576,7 +1576,7 @@
     <!-- ===== Menu Dropdown ===== -->
     <div class="menu-dropdown" id="menuDropdown">
         <button class="menu-close" onclick="closeMenu()">✕</button>
-        <div class="menu-title">📱 سوئیچ برنامه</div>
+        <div class="menu-title">📱 منوی برنامه</div>
         <button class="menu-item" data-app="secret" id="menuSecret">
             <span class="item-icon">🤫</span>
             Hidden Language
@@ -1587,6 +1587,22 @@
             <span class="item-icon">🥺</span>
             Dosham Dalli؟
             <span class="item-badge enter" id="badgeDosham">ورود</span>
+        </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="update" id="menuUpdate">
+            <span class="item-icon">🔄</span>
+            بررسی آپدیت
+            <span class="item-badge" id="updateBadge">آپدیت</span>
+        </button>
+        <button class="menu-item" data-action="messages" id="menuMessages">
+            <span class="item-icon">📢</span>
+            پیام‌ها
+            <span class="item-badge" id="messagesBadge">پیام</span>
+        </button>
+        <button class="menu-item" data-action="help" id="menuHelp">
+            <span class="item-icon">!</span>
+            راهنمای ساعت‌ها
+            <span class="item-badge" id="helpBadge">راهنما</span>
         </button>
         <div class="menu-divider"></div>
         <button class="menu-item" data-action="install" id="menuInstall">
@@ -1605,9 +1621,6 @@
                 <div class="nearest-hour" id="nearestHour">⏳ نزدیک‌ترین: <span class="nh-time">--:--</span> <span class="nh-meaning">...</span> <span class="nh-source"></span></div>
                 <div class="header-actions">
                     <button class="menu-btn" id="menuBtn" title="سوئیچ برنامه">☰</button>
-                    <button class="menu-btn" id="updateCheckBtn" title="بررسی آپدیت">🔄</button>
-                    <button class="menu-btn" id="messagesBtn" title="پیام‌ها">📢<span class="msg-dot" id="msgDot"></span></button>
-                    <button class="help-btn" id="helpBtn" title="مشاهده همه معانی ساعت‌ها">!</button>
                 </div>
             </div>
             <div class="header-bottom">
@@ -2422,7 +2435,8 @@
                 e.stopPropagation();
                 if (isSwitching) return;
 
-                if (this.dataset.action === 'install') {
+                const action = this.dataset.action;
+                if (action === 'install') {
                     if (!deferredInstallPrompt) {
                         showToast('برای نصب برنامه، این صفحه باید روی HTTPS یا localhost و در Chromium/Edge اجرا شود.', 'info', 2600);
                         return;
@@ -2444,6 +2458,28 @@
                     deferredInstallPrompt = null;
                     if (installMenu) {
                         installMenu.querySelector('.item-badge').textContent = 'نصب‌شده';
+                    }
+                    return;
+                }
+
+                if (action === 'messages') {
+                    closeMenu();
+                    openMessages();
+                    return;
+                }
+
+                if (action === 'help') {
+                    closeMenu();
+                    showHoursListWithSearch();
+                    return;
+                }
+
+                if (action === 'update') {
+                    closeMenu();
+                    if (window.runUpdateCheckNow) {
+                        window.runUpdateCheckNow();
+                    } else {
+                        checkForUpdate();
                     }
                     return;
                 }
