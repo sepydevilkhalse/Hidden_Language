@@ -1588,6 +1588,12 @@
             Dosham Dalli؟
             <span class="item-badge enter" id="badgeDosham">ورود</span>
         </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item" data-action="install" id="menuInstall">
+            <span class="item-icon">⬇️</span>
+            نصب برنامه PWA
+            <span class="item-badge" id="installBadge">نصب</span>
+        </button>
     </div>
 
 
@@ -2269,6 +2275,7 @@
         // ==============================================
         const menuBtn = document.getElementById('menuBtn');
         const menuDropdown = document.getElementById('menuDropdown');
+        const installMenu = document.getElementById('menuInstall');
         const badgeSecret = document.getElementById('badgeSecret');
         const badgeDosham = document.getElementById('badgeDosham');
         const appSecret = document.getElementById('appSecret');
@@ -2411,11 +2418,38 @@
         }
 
         document.querySelectorAll('.menu-item').forEach(item => {
-            item.addEventListener('click', function(e) {
+            item.addEventListener('click', async function(e) {
                 e.stopPropagation();
                 if (isSwitching) return;
+
+                if (this.dataset.action === 'install') {
+                    if (!deferredInstallPrompt) {
+                        showToast('برای نصب برنامه، این صفحه باید روی HTTPS یا localhost و در Chromium/Edge اجرا شود.', 'info', 2600);
+                        return;
+                    }
+
+                    try {
+                        deferredInstallPrompt.prompt();
+                        const choice = await deferredInstallPrompt.userChoice;
+                        if (choice.outcome === 'accepted') {
+                            showToast('📲 نصب شروع شد', 'success', 1800);
+                        } else {
+                            showToast('نصب لغو شد', 'info', 1800);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast('نصب برنامه ممکن نشد', 'error', 2200);
+                    }
+
+                    deferredInstallPrompt = null;
+                    if (installMenu) {
+                        installMenu.querySelector('.item-badge').textContent = 'نصب‌شده';
+                    }
+                    return;
+                }
+
                 const app = this.dataset.app;
-                switchApp(app);
+                if (app) switchApp(app);
             });
         });
 
@@ -3362,11 +3396,28 @@
         // (see sw.js: it caches the document and always serves that cached
         // copy first, so writing a new copy into the cache + reloading is
         // effectively "downloading and running" the update).
+        let deferredInstallPrompt = null;
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(err => console.error('SW register failed:', err));
             });
         }
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            if (installMenu) {
+                installMenu.querySelector('.item-badge').textContent = 'نصب';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            if (installMenu) {
+                installMenu.querySelector('.item-badge').textContent = 'نصب‌شده';
+            }
+        });
 
         // ==============================================
         // ===== Manual update check (GitHub repo) =====
