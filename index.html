@@ -175,14 +175,14 @@
             min-height: 100vh;
         }
         .glass-card {
-            background: rgba(30, 24, 54, 0.32);
-            backdrop-filter: blur(18px);
-            -webkit-backdrop-filter: blur(18px);
-            border-radius: 24px;
-            padding: 12px 14px;
-            border: 1px solid rgba(139, 92, 246, 0.1);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.03);
-            transition: transform 0.15s cubic-bezier(0.22,1,0.36,1), box-shadow 0.15s ease;
+            background: rgba(30, 24, 54, 0.26);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 10px 12px;
+            border: 1px solid rgba(139, 92, 246, 0.08);
+            box-shadow: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
             position: relative;
         }
         .glass-card:active { transform: scale(0.99); }
@@ -191,15 +191,15 @@
         .header {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            padding: 8px 12px !important;
+            gap: 3px;
+            padding: 7px 10px !important;
         }
         .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            gap: 4px;
+            gap: 6px;
         }
         .nearest-hour {
             font-size: 0.55rem;
@@ -3378,9 +3378,9 @@
         // overwrites the installed copy after they confirm the prompt.
         // Offline: fetch fails, so we just say so and keep using whatever
         // is already installed/cached.
-        const APP_VERSION = '2026.09.08.6';
+        const APP_VERSION = '2026.09.09.1';
         const REPO_OWNER = 'sepydevilkhalse';
-        const REPO_NAME = 'vs-code';
+        const REPO_NAME = 'Hidden_Language';
         const REPO_BRANCH = 'main';
         const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
 
