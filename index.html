@@ -3378,11 +3378,21 @@
         // overwrites the installed copy after they confirm the prompt.
         // Offline: fetch fails, so we just say so and keep using whatever
         // is already installed/cached.
-        const APP_VERSION = '2026.09.09.1';
+        const APP_VERSION = '2026.09.09.2';
         const REPO_OWNER = 'sepydevilkhalse';
         const REPO_NAME = 'Hidden_Language';
         const REPO_BRANCH = 'main';
         const UPDATE_CACHE_NAME = 'hidden-language-cache-v1';
+        const APP_ASSETS = [
+            'index.html',
+            'manifest.webmanifest',
+            'sw.js',
+            'README.md',
+            'icon-32.png',
+            'icon-180.png',
+            'icon-192.png',
+            'icon-512.png'
+        ];
 
         // ==============================================
         // ===== Fast, resilient fetch from the GitHub repo =====
@@ -3400,7 +3410,7 @@
             return fetch(url, Object.assign({}, options, { signal: controller.signal })).finally(() => clearTimeout(id));
         }
 
-        async function fetchFreshFile(path) {
+        async function fetchFreshAsset(path, binary = false) {
             const jsdelivrUrl = 'https://cdn.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
             const purgeUrl = 'https://purge.jsdelivr.net/gh/' + REPO_OWNER + '/' + REPO_NAME + '@' + REPO_BRANCH + '/' + path;
             const rawUrl = 'https://raw.githubusercontent.com/' + REPO_OWNER + '/' + REPO_NAME + '/' + REPO_BRANCH + '/' + path;
@@ -3409,12 +3419,14 @@
 
             try {
                 const res = await fetchWithTimeout(jsdelivrUrl + '?t=' + Date.now(), { cache: 'no-store' }, 4000);
-                if (res.ok) return await res.text();
+                if (res.ok) {
+                    return binary ? await res.arrayBuffer() : await res.text();
+                }
             } catch (e) {}
 
             const res2 = await fetchWithTimeout(rawUrl + '?t=' + Date.now(), { cache: 'no-store' }, 6000);
             if (!res2.ok) throw new Error('HTTP ' + res2.status + (res2.status === 404 ? ' — فایل پیدا نشد' : ''));
-            return await res2.text();
+            return binary ? await res2.arrayBuffer() : await res2.text();
         }
 
         function extractAppVersion(htmlText) {
@@ -3457,16 +3469,25 @@
             });
         }
 
-        async function installUpdate(html, version) {
+        async function installUpdate(files, version) {
             try {
                 setPullStatus('⬇️ در حال نصب نسخه جدید...');
                 if ('caches' in window) {
                     const cache = await caches.open(UPDATE_CACHE_NAME);
-                    const makeResponse = () => new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
                     const docUrl = location.href.split('#')[0].split('?')[0];
-                    await cache.put(new Request(docUrl), makeResponse());
-                    await cache.put(new Request('./'), makeResponse());
-                    await cache.put(new Request('./index.html'), makeResponse());
+
+                    for (const file of APP_ASSETS) {
+                        const isBinary = file.startsWith('icon-');
+                        const content = files[file];
+                        const mime = isBinary ? 'image/png' : file.endsWith('.json') ? 'application/json; charset=utf-8' : file.endsWith('.js') ? 'application/javascript; charset=utf-8' : file.endsWith('.md') ? 'text/markdown; charset=utf-8' : file.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream';
+                        const response = new Response(isBinary ? content : content, { headers: { 'Content-Type': mime } });
+                        await cache.put(new Request('./' + file), response.clone());
+                        if (file === 'index.html') {
+                            await cache.put(new Request(docUrl), response.clone());
+                            await cache.put(new Request('./'), response.clone());
+                            await cache.put(new Request('./index.html'), response.clone());
+                        }
+                    }
                 }
                 localStorage.setItem('installedVersion', version);
                 setPullStatus('✅ نصب شد! در حال بازکردن نسخه جدید...');
@@ -3489,7 +3510,7 @@
             }
             setPullStatus('🔄 در حال بررسی آپدیت...');
             try {
-                const text = await fetchFreshFile('index.html');
+                const text = await fetchFreshAsset('index.html');
                 const remoteVersion = extractAppVersion(text);
                 if (!remoteVersion) throw new Error('no version marker found');
                 if (remoteVersion === APP_VERSION) {
@@ -3499,7 +3520,14 @@
                 if (!wantsUpdate) {
                     return { ok: true, text: 'نسخه جدید موجوده (رد شد)' };
                 }
-                await installUpdate(text, remoteVersion);
+
+                const assets = {};
+                for (const asset of APP_ASSETS) {
+                    const isBinary = asset.startsWith('icon-');
+                    assets[asset] = await fetchFreshAsset(asset, isBinary);
+                }
+
+                await installUpdate(assets, remoteVersion);
                 return { ok: true, text: '✅ نصب شد' };
             } catch (err) {
                 console.error(err);
