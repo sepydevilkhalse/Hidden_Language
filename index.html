@@ -3465,7 +3465,7 @@
         // overwrites the installed copy after they confirm the prompt.
         // Offline: fetch fails, so we just say so and keep using whatever
         // is already installed/cached.
-        const APP_VERSION = '2026.09.09.4';
+        const APP_VERSION = '2026.09.09.5';
         const REPO_OWNER = 'sepydevilkhalse';
         const REPO_NAME = 'Hidden_Language';
         const REPO_BRANCH = 'main';
@@ -3516,6 +3516,10 @@
             return binary ? await res2.arrayBuffer() : await res2.text();
         }
 
+        function supportsAssetInstall() {
+            return Boolean(window.caches && 'caches' in window && 'CacheStorage' in window && typeof caches.open === 'function');
+        }
+
         function extractAppVersion(htmlText) {
             const m = htmlText.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
             return m ? m[1] : null;
@@ -3559,29 +3563,33 @@
         async function installUpdate(files, version) {
             try {
                 setPullStatus('⬇️ در حال نصب نسخه جدید...');
-                if ('caches' in window) {
-                    const cache = await caches.open(UPDATE_CACHE_NAME);
-                    const docUrl = location.href.split('#')[0].split('?')[0];
+                if (!supportsAssetInstall()) {
+                    setPullStatus('📦 این نسخه از HTML2App/WebView cache پشتیبانی نمی‌کند');
+                    throw new Error('HTML2App/WebView cache is unavailable; rebuild package from latest zip');
+                }
 
-                    for (const file of APP_ASSETS) {
-                        const isBinary = file.startsWith('icon-');
-                        const content = files[file];
-                        const mime = isBinary ? 'image/png' : file.endsWith('.json') ? 'application/json; charset=utf-8' : file.endsWith('.js') ? 'application/javascript; charset=utf-8' : file.endsWith('.md') ? 'text/markdown; charset=utf-8' : file.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream';
-                        const response = new Response(isBinary ? content : content, { headers: { 'Content-Type': mime } });
-                        await cache.put(new Request('./' + file), response.clone());
-                        if (file === 'index.html') {
-                            await cache.put(new Request(docUrl), response.clone());
-                            await cache.put(new Request('./'), response.clone());
-                            await cache.put(new Request('./index.html'), response.clone());
-                        }
+                const cache = await caches.open(UPDATE_CACHE_NAME);
+                const docUrl = location.href.split('#')[0].split('?')[0];
+
+                for (const file of APP_ASSETS) {
+                    const isBinary = file.startsWith('icon-');
+                    const content = files[file];
+                    const mime = isBinary ? 'image/png' : file.endsWith('.json') ? 'application/json; charset=utf-8' : file.endsWith('.js') ? 'application/javascript; charset=utf-8' : file.endsWith('.md') ? 'text/markdown; charset=utf-8' : file.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream';
+                    const response = new Response(content, { headers: { 'Content-Type': mime } });
+                    await cache.put(new Request('./' + file), response.clone());
+                    if (file === 'index.html') {
+                        await cache.put(new Request(docUrl), response.clone());
+                        await cache.put(new Request('./'), response.clone());
+                        await cache.put(new Request('./index.html'), response.clone());
                     }
                 }
+
                 localStorage.setItem('installedVersion', version);
                 setPullStatus('✅ نصب شد! در حال بازکردن نسخه جدید...');
                 setTimeout(() => location.reload(), 800);
             } catch (err) {
                 console.error(err);
-                setPullStatus('❌ نصب آپدیت ناموفق بود');
+                setPullStatus('❌ نصب آپدیت ناموفق بود — برای HTML2App نسخه را دوباره پکیج کن');
             }
         }
 
@@ -3594,6 +3602,10 @@
             if (!navigator.onLine) {
                 setPullStatus('📴 آفلاین؛ نسخه‌ی نصب‌شده فعلی اجرا می‌مونه');
                 return { ok: false, text: '📴 آفلاین' };
+            }
+            if (!supportsAssetInstall()) {
+                setPullStatus('📦 HTML2App/WebView cache ندارد');
+                return { ok: false, text: '📦 پکیج HTML2App از آپدیت خودکار پشتیبانی نمی‌کند' };
             }
             setPullStatus('🔄 در حال بررسی آپدیت...');
             try {
@@ -3859,7 +3871,7 @@
 
         async function fetchMessages(silent) {
             try {
-                const text = await fetchFreshFile('README.md');
+                const text = await fetchFreshAsset('README.md');
                 const seenHash = localStorage.getItem('messagesSeenHash');
                 const newHash = simpleHash(text);
                 localStorage.setItem('messagesContent', text);
